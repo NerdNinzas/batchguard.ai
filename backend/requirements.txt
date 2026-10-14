@@ -1,0 +1,12 @@
+fastapi
+uvicorn[standard]
+pydantic[email]
+pydantic-settings
+google-adk
+google-genai
+python-multipart
+PyJWT
+google-auth
+requests
+sse-starlette
+numpy

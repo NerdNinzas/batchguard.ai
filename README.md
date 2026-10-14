@@ -1,16 +1,43 @@
-# BatchGuard AI — landing page
+# BatchGuard AI
 
-Marketing / explainer site for **BatchGuard AI**, our entry to the Google Cloud AI Builder Cup 2026 (Manufacturing theme).
-A live 3D packaging line runs, develops a bearing fault, the agent investigates, the owner gets a phone call, and the
-engineer closes the loop — all rendered in the browser with React Three Fiber.
+Factory monitoring with an investigating AI agent — our entry to the Google Cloud AI Builder Cup 2026 (Manufacturing).
+Onboard a machine from its PDF manual, stream telemetry through a per-machine API, and let **Muse** (the agent, on
+Google ADK + Gemini) detect problems, explain the likely cause with evidence, and escalate.
+
+Two parts in this repo:
+
+- **Frontend** (this folder) — Next.js 16: landing page, auth, Muse-guided onboarding, dashboard (machines, PDF/manual
+  onboarding with verification, workflow node builder, live 3D factory, telemetry, incidents, observability, contacts, settings).
+- **Backend** (`backend/`) — FastAPI + Google ADK: auth, orgs, machine specs + device keys, `/v1/telemetry` ingestion,
+  deterministic detection (limits · trend · anomaly · staleness), incident lifecycle + escalation, the investigation agent
+  (Gemini via ADK, rule-based fallback), email notifications, SSE live stream. See `backend/README.md`.
 
 ## Run
 
 ```bash
-npm install
-npm run dev        # http://localhost:3000
-npm run build && npm start
+# 1 · backend (Python 3.12)
+cd backend && uv venv --python 3.12 .venv && uv pip install --python .venv/bin/python -r requirements.txt
+cp .env.example .env            # set AUTH_SECRET; GOOGLE_API_KEY etc. are optional
+cd .. && npm run backend        # http://localhost:8000
+
+# 2 · frontend
+npm install && cp .env.example .env.local
+npm run dev                     # http://localhost:3000  (proxies /api/* and /v1/* to the backend)
+
+# 3 · a device (after onboarding a machine and copying its key)
+npm run device -- --device <device_id> --key <api_key> --type conveyor --fault bearing_wear
 ```
+
+Without any Google Cloud credentials everything still works: Gemini falls back to a rule-based investigator and template
+extraction, Google sign-in is replaced by email/password, and emails are recorded as "simulated". Add keys to the two
+`.env` files to switch each integration on. Voice escalation (TeleCMI + Gemini Live) is planned and not wired.
+
+## Flow
+
+sign up → onboarding modals (organisation, use cases, escalation contacts; Muse guides each step) → dashboard →
+onboard a machine (PDF → Gemini extraction, or manual; every value ticked as verified) → device ID + key + endpoint →
+device posts to `/v1/telemetry` → detection opens an incident → Muse investigates → in-app + email escalation → engineer
+acknowledges / resolves with feedback.
 
 ## Stack
 
@@ -26,7 +53,9 @@ npm run build && npm start
 src/
   app/
     page.tsx                 # landing page composition
-    simulator/page.tsx       # placeholder route for the Virtual Factory
+    login/ signup/ onboarding/   # auth + Muse-guided onboarding wizard
+    app/                     # dashboard: layout (Shell), overview, machines/[id], onboard, workflow, factory,
+                             #   telemetry, incidents/[id], observability, contacts, settings
     globals.css              # light / blue theme tokens
   components/
     three/
@@ -36,7 +65,12 @@ src/
       HUD.tsx                # overlay readouts, stage tag, call bubble
       HeroScene.tsx          # client-only dynamic wrapper
       ParticleField.tsx      # CTA background
+      LiveFactory.tsx        # dashboard 3D view of onboarded machines, coloured by live status
+    app/                     # Shell (sidebar, topbar, live notifications), charts, KeyReveal
+    auth/AuthCard.tsx        # email/password + Google (Firebase) sign-in
+    ui/                      # Primitives (Button, Input, Modal, Badge…), Toast
     muse/
+      MuseGuide.tsx          # in-app Muse that waves on each step/page
       MuseCompanion.tsx      # fixed full-body companion from the render: floats, leans to the cursor, waves on every section
       MuseLogo.tsx           # head crop of the render for header/footer
       MuseFace.tsx           # SVG face (kept for small inline uses)
@@ -47,8 +81,10 @@ src/
       Journey.tsx            # three stations on a conveyor (Onboard → Watch → Respond)
       Problem / Agent / Architecture / Evaluation / Scale / CTA / Footer / Navbar / Marquee
     ui/                      # Section, Reveal, GlowCard
-  lib/content.ts             # all copy, mirrors the PRD
-  simulator/                 # reserved for the real Virtual Factory module (see README inside)
+  lib/content.ts             # all landing copy, mirrors the PRD
+  lib/api.ts                 # typed fetch client + useLive() SSE hook
+  lib/firebase.ts            # optional Google sign-in
+backend/                     # FastAPI + ADK (see backend/README.md)
 ```
 
 ## Assets & credits

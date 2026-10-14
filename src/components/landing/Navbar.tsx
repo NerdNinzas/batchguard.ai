@@ -42,9 +42,12 @@ export function Navbar() {
           </nav>
 
           <div className="hidden items-center gap-3 md:flex">
-            <a href="#journey" className="rounded-xl bg-blue px-4 py-2 text-sm font-semibold text-white transition hover:brightness-110">
-              See how it works
-            </a>
+            <Link href="/login" className="rounded-xl px-3 py-2 text-sm text-muted transition hover:text-ink">
+              Sign in
+            </Link>
+            <Link href="/signup" className="rounded-xl bg-blue px-4 py-2 text-sm font-semibold text-white transition hover:brightness-110">
+              Get started
+            </Link>
           </div>
 
           <button aria-label="Menu" className="md:hidden" onClick={() => setOpen((v) => !v)}>
@@ -59,6 +62,9 @@ export function Navbar() {
                 {n.label}
               </a>
             ))}
+            <Link href="/signup" className="rounded-lg px-3 py-2 text-sm font-semibold text-blue">
+              Get started →
+            </Link>
           </div>
         )}
       </div>
