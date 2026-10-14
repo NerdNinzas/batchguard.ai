@@ -125,7 +125,7 @@ export default function OnboardPage() {
               <Button key={t} size="sm" variant={type === t ? "primary" : "secondary"} onClick={() => applyTemplate(t)}>{t}</Button>
             ))}
           </div>
-          <p className="mt-2 text-xs text-muted">Templates are typical values for the machine type, marked as defaults. Replace them with the values from your machine's documentation.</p>
+          <p className="mt-2 text-xs text-muted">Templates are typical values for the machine type, marked as defaults. Replace them with the values from your machine&apos;s documentation.</p>
         </Card>
       )}
 
@@ -194,7 +194,7 @@ export default function OnboardPage() {
       <Card>
         <label className="flex cursor-pointer items-start gap-3">
           <input type="checkbox" checked={confirmAll} onChange={(e) => setConfirmAll(e.target.checked)} className="mt-0.5 h-5 w-5 accent-blue" />
-          <span className="text-sm text-ink">I verified these limits against the machine's documentation and take responsibility for them. BatchGuard will alert and escalate based on these values; it never changes machine settings.</span>
+          <span className="text-sm text-ink">I verified these limits against the machine&apos;s documentation and take responsibility for them. BatchGuard will alert and escalate based on these values; it never changes machine settings.</span>
         </label>
         <div className="mt-4 flex items-center justify-between">
           <p className="text-xs text-muted">On confirm you get a device ID, API key and endpoint with the exact parameters it accepts.</p>

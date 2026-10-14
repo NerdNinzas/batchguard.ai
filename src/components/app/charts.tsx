@@ -32,7 +32,7 @@ export function Sparkline({ data, color = C.blue, height = 40 }: { data: { v: nu
 
 /** Live parameter chart with the normal band (green), warning (amber) and critical (red) lines. */
 export function LimitChart({ data, param, height = 220, now }: { data: { t: number; v: number }[]; param: Parameter; height?: number; now?: number }) {
-  const n = now ?? Date.now() / 1000;
+  const n = now ?? data[data.length - 1]?.t ?? 0;
   const pts = data.map((d) => ({ x: Math.round(d.t - n), v: d.v }));
   const vals = pts.map((p) => p.v);
   const bounds = [param.crit_low, param.crit_high, param.warn_low, param.warn_high, param.normal_min, param.normal_max].filter((x): x is number => typeof x === "number");

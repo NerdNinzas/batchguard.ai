@@ -109,7 +109,7 @@ export default function IncidentPage() {
           <Select label="Was the diagnosis right?" value={fb.verdict} onChange={(e) => setFb({ ...fb, verdict: e.target.value })}><option value="correct">Correct</option><option value="partly">Partly</option><option value="wrong">Wrong</option></Select>
           <Input label="Actual cause" value={fb.actual_cause} onChange={(e) => setFb({ ...fb, actual_cause: e.target.value })} placeholder="Bearing wear" />
           <Input label="What fixed it" value={fb.fix} onChange={(e) => setFb({ ...fb, fix: e.target.value })} placeholder="Replaced drive-end bearing" />
-          <p className="text-xs text-muted">Resolving by {user.email}. Feedback feeds Muse's history for this machine.</p>
+          <p className="text-xs text-muted">Resolving by {user.email}. Feedback feeds Muse&apos;s history for this machine.</p>
         </div>
         <div className="mt-5 flex justify-end gap-2"><Button variant="ghost" onClick={() => setResolveOpen(false)}><X size={14} /> Cancel</Button><Button onClick={resolve}><Check size={14} /> Resolve</Button></div>
       </Modal>

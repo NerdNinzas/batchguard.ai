@@ -8,7 +8,8 @@ from pydantic import BaseModel, Field
 from .. import bus
 from ..auth import hash_api_key
 from ..db import conn, row, tx
-from ..detection import Signal, limit_state, run_detection
+from ..detection import Signal
+from ..ingest import ingest_readings
 from ..ids import new_id, now
 from ..incidents import handle_signals
 
@@ -50,44 +51,7 @@ def _device(device_id: str, key: str | None) -> dict[str, Any]:
 @router.post("/telemetry")
 def telemetry(body: TelemetryIn, x_device_key: str | None = Header(default=None)) -> dict[str, Any]:
     m = _device(body.device_id, x_device_key)
-    t = now()
-    known = {r["name"]: r for r in conn().execute("SELECT * FROM parameters WHERE machine_id=?", (m["id"],)).fetchall()}
-    accepted, rejected, duplicates = 0, [], 0
-    latest_payload: dict[str, Any] = {}
-    all_signals: list[Signal] = []
-    with tx() as c:
-        for r in body.readings:
-            p = known.get(r.parameter)
-            if not p:
-                rejected.append({"parameter": r.parameter, "reason": "not in verified spec"})
-                continue
-            unit = r.unit or p["unit"]
-            if r.unit and p["unit"] and r.unit.lower() != p["unit"].lower():
-                rejected.append({"parameter": r.parameter, "reason": f"unit {r.unit} != spec {p['unit']}"})
-                continue
-            ts = r.ts or t
-            if r.reading_id and c.execute("SELECT 1 FROM readings WHERE machine_id=? AND reading_id=?", (m["id"], r.reading_id)).fetchone():
-                duplicates += 1
-                continue
-            c.execute("INSERT INTO readings (machine_id, parameter, value, unit, ts, received_at, reading_id) VALUES (?,?,?,?,?,?,?)",
-                      (m["id"], r.parameter, r.value, unit, ts, t, r.reading_id))
-            state = limit_state(dict(p), r.value)
-            c.execute("INSERT INTO latest (machine_id, parameter, value, unit, ts, state) VALUES (?,?,?,?,?,?) "
-                      "ON CONFLICT(machine_id, parameter) DO UPDATE SET value=excluded.value, unit=excluded.unit, ts=excluded.ts, state=excluded.state",
-                      (m["id"], r.parameter, r.value, unit, ts, state))
-            latest_payload[r.parameter] = {"value": r.value, "unit": unit, "ts": ts, "state": state}
-            accepted += 1
-        was_offline = m["status"] in ("offline", "stale")
-        c.execute("UPDATE machines SET last_seen=?, status=CASE WHEN status IN ('offline','stale') THEN 'normal' ELSE status END WHERE id=?", (t, m["id"]))
-    # detection runs after the write so trend/anomaly see the new point
-    for r in body.readings:
-        if r.parameter in known and r.parameter in latest_payload:
-            all_signals += run_detection(m["id"], r.parameter, r.value, r.unit, t)
-    bus.publish(m["org_id"], "telemetry", {"machine_id": m["id"], "device_id": m["device_id"], "latest": latest_payload, "ts": t})
-    if was_offline:
-        bus.publish(m["org_id"], "machine", {"id": m["id"], "status": "normal", "health": m["health"]})
-    handle_signals(m["id"], all_signals)
-    return {"accepted": accepted, "rejected": rejected, "duplicates": duplicates, "signals": [s.as_dict() for s in all_signals]}
+    return ingest_readings(m, [r.model_dump() for r in body.readings])
 
 
 @router.post("/events")

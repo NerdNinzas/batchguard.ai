@@ -76,7 +76,12 @@ export function MuseCompanion() {
           }
         });
         const i = SCRIPT.findIndex((s) => s.id === bestId);
-        if (i >= 0) setIdx(i);
+        if (i >= 0) {
+          setIdx((cur) => {
+            if (cur !== i) setOpen(true);
+            return i;
+          });
+        }
       },
       { threshold: [0, 0.15, 0.3, 0.5, 0.7, 1] },
     );
@@ -84,9 +89,8 @@ export function MuseCompanion() {
     return () => io.disconnect();
   }, []);
 
-  // wave + reopen the bubble whenever the section changes
+  // wave whenever the section changes
   useEffect(() => {
-    setOpen(true);
     wave();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [idx]);

@@ -32,6 +32,7 @@ class Settings(BaseSettings):
     incident_cooldown_seconds: int = 300
     escalation_timeout_seconds: int = 120
     trend_window_seconds: int = 60
+    demo_mode: bool = True
 
     @property
     def db_file(self) -> Path:

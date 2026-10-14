@@ -102,6 +102,11 @@ export function AuthCard({ mode }: { mode: "login" | "signup" }) {
           <Button type="submit" className="mt-6 w-full" size="lg" loading={busy}>
             {mode === "signup" ? "Create account" : "Sign in"}
           </Button>
+          {mode === "login" && (
+            <button type="button" onClick={() => { setEmail("demo@batchguard.ai"); setPassword("demo1234"); }} className="mt-4 w-full rounded-xl border border-dashed border-blue/40 bg-blue/5 px-3 py-2 text-xs text-ink hover:bg-blue/10">
+              Try the demo factory · <span className="font-mono">demo@batchguard.ai</span> / <span className="font-mono">demo1234</span>
+            </button>
+          )}
           <p className="mt-5 text-center text-sm text-muted">
             {mode === "signup" ? "Already have an account? " : "New to BatchGuard? "}
             <Link href={mode === "signup" ? "/login" : "/signup"} className="font-semibold text-blue hover:underline">

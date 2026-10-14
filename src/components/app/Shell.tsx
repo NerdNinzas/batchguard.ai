@@ -7,7 +7,7 @@ import {
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import { MuseGuide } from "@/components/muse/MuseGuide";
+import { MuseChip } from "@/components/muse/MuseChip";
 import { MuseLogo } from "@/components/muse/MuseLogo";
 import { Badge, Button } from "@/components/ui/Primitives";
 import { useToast } from "@/components/ui/Toast";
@@ -198,9 +198,7 @@ export function Shell({ children }: { children: ReactNode }) {
           <main className="flex-1 p-4 sm:p-6">{children}</main>
         </div>
 
-        <div className="pointer-events-none fixed bottom-3 right-3 z-30 hidden xl:block">
-          <MuseGuide line={museLine} size={120} />
-        </div>
+        <MuseChip line={museLine} />
       </div>
     </Ctx.Provider>
   );

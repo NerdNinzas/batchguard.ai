@@ -13,8 +13,8 @@ const K = 1.5;
 const FLOOR = 0;
 const HEALTH_HEX: Record<string, string> = { normal: "#16c784", warning: "#f59e0b", critical: "#ef4444", emergency: "#ef4444", stale: "#f59e0b", offline: "#9fb0c8" };
 const MODEL_BY_TYPE: Record<string, { name: string; scale?: number; y?: number; rot?: number }> = {
-  conveyor: { name: "conveyor-long-sides" }, motor: { name: "machine-fortified", scale: 1.2 }, pump: { name: "piston-round", scale: 1.6 }, compressor: { name: "machine-window", scale: 1.1 },
-  hopper: { name: "hopper-high-round" }, sealer: { name: "machine", scale: 1.1 }, inspection: { name: "scanner-high" }, other: { name: "machine-bed", scale: 1.3 },
+  conveyor: { name: "conveyor-long-sides" }, motor: { name: "machine-fortified", scale: 1.4 }, pump: { name: "piston-round", scale: 1.9 }, compressor: { name: "machine-window", scale: 1.35 },
+  hopper: { name: "hopper-high-round", scale: 1.25 }, sealer: { name: "machine", scale: 1.35 }, inspection: { name: "scanner-high", scale: 1.25 }, other: { name: "machine-bed", scale: 1.5 },
 };
 
 function Kit({ name, position = [0, 0, 0], scale = K, rotation = [0, 0, 0] }: { name: string; position?: [number, number, number]; scale?: number; rotation?: [number, number, number] }) {
@@ -91,7 +91,7 @@ function Boxes({ count, length }: { count: number; length: number }) {
 }
 
 function Scene({ machines, labels }: { machines: Machine[]; labels: MutableRefObject<Record<string, HTMLDivElement | null>> }) {
-  const gap = 7.5;
+  const gap = 6.2;
   const total = Math.max(1, machines.length);
   const width = total * gap;
   const floorTex = useMemo(() => {
@@ -107,7 +107,7 @@ function Scene({ machines, labels }: { machines: Machine[]; labels: MutableRefOb
       {machines.length > 1 && Array.from({ length: Math.ceil(width / 3) }, (_, i) => <Kit key={i} name="conveyor-long" position={[-width / 2 + 1.5 + i * 3, 0, 2.4]} />)}
       {machines.length > 1 && <group position={[0, 0, 2.4]}><Boxes count={Math.min(12, total * 2)} length={width} /></group>}
       {machines.map((m, i) => <MachineBlock key={m.id} m={m} x={-width / 2 + gap / 2 + i * gap} />)}
-      <LabelProjector anchors={machines.map((m, i) => ({ id: m.id, x: -width / 2 + gap / 2 + i * gap, y: m.type === "conveyor" ? 1.6 : 2.9 }))} labels={labels} />
+      <LabelProjector anchors={machines.map((m, i) => ({ id: m.id, x: -width / 2 + gap / 2 + i * gap, y: m.type === "conveyor" ? 1.4 : 3.2 }))} labels={labels} />
       {/* backdrop */}
       {Array.from({ length: Math.ceil(width / 3) + 2 }, (_, i) => <Kit key={i} name="structure-window-wide" position={[-width / 2 - 3 + i * 3, 0, -5]} />)}
       {Array.from({ length: Math.ceil(width / 2) + 2 }, (_, i) => <Kit key={i} name="pipe-large-long" position={[-width / 2 - 2 + i * 2, 4.4, -4]} scale={1} />)}
@@ -118,11 +118,11 @@ function Scene({ machines, labels }: { machines: Machine[]; labels: MutableRefOb
 }
 
 export default function LiveFactory({ machines, latest }: { machines: Machine[]; latest: Record<string, Latest> }) {
-  const width = Math.max(1, machines.length) * 7.5;
+  const width = Math.max(1, machines.length) * 6.2;
   const labels = useRef<Record<string, HTMLDivElement | null>>({});
   return (
     <div className="relative h-full w-full">
-    <Canvas shadows dpr={[1, 1.75]} camera={{ position: [0, 6, width * 0.7 + 9], fov: 36 }} gl={{ antialias: true, alpha: true, toneMapping: THREE.ACESFilmicToneMapping }} style={{ background: "linear-gradient(180deg,#ffffff,#eaf3ff)" }}>
+    <Canvas shadows dpr={[1, 1.75]} camera={{ position: [0, 7, width * 0.55 + 9], fov: 40 }} gl={{ antialias: true, alpha: true, toneMapping: THREE.ACESFilmicToneMapping }} style={{ background: "linear-gradient(180deg,#ffffff,#eaf3ff)" }}>
       <ambientLight intensity={0.45} />
       <directionalLight position={[6, 12, 6]} intensity={2} castShadow shadow-mapSize={[2048, 2048]} shadow-camera-left={-20} shadow-camera-right={20} shadow-camera-top={20} shadow-camera-bottom={-20} />
       <Environment resolution={256}>
@@ -132,7 +132,7 @@ export default function LiveFactory({ machines, latest }: { machines: Machine[];
       </Environment>
       <Suspense fallback={null}><Scene machines={machines} labels={labels} /></Suspense>
       <ContactShadows position={[0, 0.005, 0]} opacity={0.4} scale={40} blur={2.2} far={5} color="#0b1a33" />
-      <OrbitControls makeDefault target={[0, 1, 0]} maxPolarAngle={Math.PI / 2.1} minDistance={6} maxDistance={80} />
+      <OrbitControls makeDefault target={[0, 0.8, 0]} maxPolarAngle={Math.PI / 2.1} minDistance={6} maxDistance={80} />
     </Canvas>
     {/* DOM labels positioned by LabelProjector */}
     <div className="pointer-events-none absolute inset-0 overflow-hidden">

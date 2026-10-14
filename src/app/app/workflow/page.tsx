@@ -114,7 +114,7 @@ export default function WorkflowPage() {
     <div className="grid gap-4 lg:grid-cols-[1fr_260px]">
       <Card className="!p-0 overflow-hidden" >
         <div className="flex items-center justify-between border-b border-line px-4 py-2">
-          <p className="text-sm text-muted"><Sparkles size={14} className="mr-1 inline text-blue" />Drag from a node's right handle to the next machine's left handle. Live values update on the nodes.</p>
+          <p className="text-sm text-muted"><Sparkles size={14} className="mr-1 inline text-blue" />Drag from a node&apos;s right handle to the next machine&apos;s left handle. Live values update on the nodes.</p>
           <div className="flex gap-2">
             <Button size="sm" variant="secondary" onClick={autoChain}><Wand2 size={14} /> Auto-chain</Button>
             <Button size="sm" onClick={save} loading={saving} disabled={!dirty}><Save size={14} /> Save</Button>

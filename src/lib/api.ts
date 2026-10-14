@@ -24,7 +24,10 @@ export async function api<T = unknown>(path: string, init: RequestInit & { json?
     try {
       const d = await res.json();
       msg = typeof d.detail === "string" ? d.detail : JSON.stringify(d.detail ?? d);
-    } catch {}
+    } catch {
+      // Not JSON → the Next proxy could not reach the Python backend
+      if (res.status >= 500) msg = "Backend not reachable. Start it with `npm run backend` (FastAPI on :8000).";
+    }
     throw new ApiError(res.status, msg);
   }
   if (res.status === 204) return undefined as T;
@@ -70,7 +73,9 @@ export type LiveEvent = { type: "telemetry" | "incident" | "machine" | "event" |
 export function useLive(onEvent: (e: LiveEvent) => void, enabled = true) {
   const [connected, setConnected] = useState(false);
   const cb = useRef(onEvent);
-  cb.current = onEvent;
+  useEffect(() => {
+    cb.current = onEvent;
+  });
   useEffect(() => {
     if (!enabled) return;
     const es = new EventSource("/api/stream", { withCredentials: true });

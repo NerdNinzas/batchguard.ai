@@ -59,7 +59,7 @@ export default function SettingsPage() {
       </div>
 
       <Card title="Blind evaluation" action={score && <Badge tone="violet">{score.summary.runs} run(s)</Badge>}>
-        <p className="text-sm text-muted">Record the hidden fault label first (stored where the agent's tools cannot read it), then start the fault on the device. The first incident after that timestamp is scored against the label.</p>
+        <p className="text-sm text-muted">Record the hidden fault label first (stored where the agent&apos;s tools cannot read it), then start the fault on the device. The first incident after that timestamp is scored against the label.</p>
         {score && (
           <div className="mt-3 grid gap-3 sm:grid-cols-4">
             <Stat label="Detected" value={`${Math.round(score.summary.detected * 100)}%`} tone="green" />

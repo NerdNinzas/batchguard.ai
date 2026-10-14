@@ -84,10 +84,17 @@ def check_limits(machine_id: str, p: dict[str, Any], v: float, unit: str | None)
 def check_trend(machine_id: str, p: dict[str, Any], now: float) -> Signal | None:
     """Linear fit over the trend window; warn when a critical limit is projected within 10 min."""
     ts, vs = _series(machine_id, p["name"], now - settings.trend_window_seconds)
-    if len(ts) < 8 or (ts[-1] - ts[0]) < settings.trend_window_seconds * 0.5:
+    if len(ts) < 30 or (ts[-1] - ts[0]) < settings.trend_window_seconds * 0.8:
         return None
-    slope, intercept = np.polyfit(ts - ts[0], vs, 1)  # units per second
+    x = ts - ts[0]
+    slope, intercept = np.polyfit(x, vs, 1)  # units per second
     if abs(slope) < 1e-9:
+        return None
+    # the fit must explain the data (R²) and the projected move must beat the noise
+    resid = vs - (slope * x + intercept)
+    ss_res, ss_tot = float((resid**2).sum()), float(((vs - vs.mean()) ** 2).sum())
+    r2 = 1 - ss_res / ss_tot if ss_tot > 0 else 0.0
+    if r2 < 0.6 or abs(slope) * (x[-1] - x[0]) < 3 * float(resid.std() or 1e-9):
         return None
     current = float(vs[-1])
     target = None
@@ -100,14 +107,14 @@ def check_trend(machine_id: str, p: dict[str, Any], now: float) -> Signal | None
     eta = (target - current) / slope
     if eta <= 0 or eta > 600:
         return None
-    # require a meaningful move relative to the normal band so noise doesn't trigger
+    # and a meaningful move relative to the normal band
     band = abs((p.get("normal_max") or current) - (p.get("normal_min") or current)) or abs(current) or 1.0
-    if abs(slope) * settings.trend_window_seconds < 0.05 * band:
+    if abs(slope) * settings.trend_window_seconds < 0.08 * band:
         return None
     return Signal(
         machine_id, p["name"], "trend", "warning", current,
         f"{p['name']} trending toward {target:g} — limit reached in ~{int(eta // 60)} min {int(eta % 60)} s",
-        {"eta_seconds": round(eta), "slope_per_min": round(float(slope) * 60, 4), "target": target},
+        {"eta_seconds": round(eta), "slope_per_min": round(float(slope) * 60, 4), "target": target, "r2": round(r2, 2)},
     )
 
 
