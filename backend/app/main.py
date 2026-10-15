@@ -29,6 +29,9 @@ async def lifespan(app: FastAPI):
     init_db()
     bus.bind_loop(asyncio.get_running_loop())
     cloud.setup_logging()
+    # investigations that were in flight when the previous process stopped can never finish
+    with tx() as c:
+        c.execute("UPDATE agent_runs SET finished_at=?, ok=0, error='interrupted by restart' WHERE finished_at IS NULL", (time.time(),))
     task = asyncio.create_task(_sweeper())
     if settings.demo_mode:
         await asyncio.to_thread(demo.ensure_seeded)
