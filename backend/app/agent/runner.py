@@ -22,6 +22,12 @@ def _allowed_numbers(machine_id: str) -> set[float]:
         for k in ("normal_min", "normal_max", "warn_low", "warn_high", "crit_low", "crit_high", "sample_rate", "source_page"):
             if p[k] is not None:
                 allowed.add(float(p[k]))
+    # manual page numbers and the tool windows the agent is told to use are legitimate numbers too
+    m = conn().execute("SELECT knowledge FROM machines WHERE id=?", (machine_id,)).fetchone()
+    for sec in uj(m["knowledge"], []) if m else []:
+        if sec.get("page") is not None:
+            allowed.add(float(sec["page"]))
+    allowed.update({60.0, 120.0, 300.0, 600.0, 900.0, 1800.0, 3600.0})
     return allowed
 
 
