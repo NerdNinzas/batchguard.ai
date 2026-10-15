@@ -1,4 +1,5 @@
 "use client";
+/* eslint-disable @next/next/no-img-element */
 
 import { KeyRound, RefreshCw, Siren, Trash2 } from "lucide-react";
 import Link from "next/link";
@@ -10,6 +11,7 @@ import { HealthRing, LimitChart } from "@/components/app/charts";
 import { Badge, Button, Card, Modal, Spinner, StatusDot, statusTone } from "@/components/ui/Primitives";
 import { useToast } from "@/components/ui/Toast";
 import { del, fmtAgo, fmtTime, get, post, type Incident, type Machine } from "@/lib/api";
+import { machineType } from "@/lib/machineTypes";
 
 type Series = Record<string, { t: number; v: number }[]>;
 
@@ -78,20 +80,25 @@ export default function MachinePage() {
 
   return (
     <div className="space-y-6">
-      <div className="card flex flex-wrap items-center gap-4 rounded-2xl p-5">
-        <HealthRing value={m.health} size={72} />
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <StatusDot status={m.status} />
-            <h2 className="font-display text-3xl font-semibold text-ink">{m.name}</h2>
-            <Badge tone={statusTone(m.status)}>{m.status}</Badge>
-            <Badge tone={m.verified ? "green" : "amber"}>{m.verified ? "verified" : "unverified"}</Badge>
+      <div className="card relative overflow-hidden rounded-3xl">
+        <img src={machineType(m.type)?.image ?? "/machines/conveyor.jpg"} alt="" className="absolute inset-0 h-full w-full object-cover" />
+        <div className="absolute inset-0 bg-gradient-to-r from-[#0b1a33]/95 via-[#0b1a33]/75 to-[#0b1a33]/30" />
+        <div className="relative flex flex-wrap items-center gap-4 p-6">
+          <HealthRing value={m.health} size={76} />
+          <div className="min-w-0 flex-1 text-white">
+            <div className="flex flex-wrap items-center gap-2">
+              <StatusDot status={m.status} />
+              <h2 className="font-display text-4xl font-semibold">{m.name}</h2>
+              <Badge tone={statusTone(m.status)} className="!bg-white/90">{m.status}</Badge>
+              <Badge tone={m.verified ? "green" : "amber"} className="!bg-white/90">{m.verified ? "verified" : "unverified"}</Badge>
+            </div>
+            <p className="mt-1 font-mono text-xs text-white/75">{m.device_id} · {machineType(m.type)?.name ?? m.type}{m.location ? ` · ${m.location}` : ""} · source: {m.source}{m.manual_name ? ` (${m.manual_name})` : ""} · last seen {fmtAgo(m.last_seen)}</p>
+            {machineType(m.type) && <p className="mt-2 max-w-2xl text-sm text-white/80">{machineType(m.type)!.tagline}</p>}
           </div>
-          <p className="font-mono text-xs text-muted">{m.device_id} · {m.type}{m.location ? ` · ${m.location}` : ""} · source: {m.source}{m.manual_name ? ` (${m.manual_name})` : ""} · last seen {fmtAgo(m.last_seen)}</p>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="secondary" size="sm" onClick={rotate} disabled={!m.verified}><RefreshCw size={14} /> Rotate key</Button>
-          <Button variant="ghost" size="sm" onClick={() => setConfirmDel(true)}><Trash2 size={14} /></Button>
+          <div className="flex gap-2">
+            <Button variant="secondary" size="sm" onClick={rotate} disabled={!m.verified}><RefreshCw size={14} /> Rotate key</Button>
+            <Button variant="secondary" size="sm" onClick={() => setConfirmDel(true)}><Trash2 size={14} /></Button>
+          </div>
         </div>
       </div>
 

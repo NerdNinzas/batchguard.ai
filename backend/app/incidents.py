@@ -198,8 +198,9 @@ def staleness_sweep() -> None:
             sig = Signal(m["id"], "telemetry", "stale", "warning", None,
                          f"No telemetry for {int(t - m['last_seen'])} s — machine offline or sensor failure", {})
             handle_signals(m["id"], [sig])
-        elif not stale and m["status"] == "stale":
-            with tx() as c:
-                c.execute("UPDATE machines SET status='normal' WHERE id=?", (m["id"],))
-            _update_machine_status(m["id"])
-            resume_from_stale(m["id"])
+        elif not stale:
+            if m["status"] == "stale":
+                with tx() as c:
+                    c.execute("UPDATE machines SET status='normal' WHERE id=?", (m["id"],))
+                _update_machine_status(m["id"])
+            resume_from_stale(m["id"])  # self-heal: a stale-only incident never outlives resumed telemetry

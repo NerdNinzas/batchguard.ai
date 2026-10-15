@@ -9,7 +9,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { MuseChip } from "@/components/muse/MuseChip";
 import { MuseLogo } from "@/components/muse/MuseLogo";
-import { Badge, Button } from "@/components/ui/Primitives";
+import { Badge } from "@/components/ui/Primitives";
 import { useToast } from "@/components/ui/Toast";
 import { fmtAgo, get, post, useLive, type LiveEvent, type Notification, type User } from "@/lib/api";
 
@@ -55,6 +55,7 @@ export function Shell({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false);
   const [notifs, setNotifs] = useState<Notification[]>([]);
   const [bell, setBell] = useState(false);
+  const [menu, setMenu] = useState(false);
   const [listeners] = useState(() => new Set<(e: LiveEvent) => void>());
 
   const refreshUser = useCallback(async () => {
@@ -180,18 +181,31 @@ export function Shell({ children }: { children: ReactNode }) {
                   )}
                 </AnimatePresence>
               </div>
-              <div className="group relative">
-                <button className="flex items-center gap-2 rounded-xl border border-line bg-white px-3 py-1.5 text-sm">
+              <div className="relative">
+                <button onClick={() => { setMenu((m) => !m); setBell(false); }} aria-expanded={menu} className={`flex items-center gap-2 rounded-xl border bg-white px-3 py-1.5 text-sm transition ${menu ? "border-blue ring-4 ring-blue/10" : "border-line hover:border-blue/50"}`}>
                   <span className="grid h-6 w-6 place-items-center rounded-full bg-blue text-xs font-bold text-white">{ctx.user.name.slice(0, 1).toUpperCase()}</span>
                   <span className="hidden sm:inline">{ctx.user.name}</span>
-                  <ChevronDown size={14} className="text-muted" />
+                  <ChevronDown size={14} className={`text-muted transition ${menu ? "rotate-180" : ""}`} />
                 </button>
-                <div className="card invisible absolute right-0 mt-2 w-48 rounded-xl p-1 opacity-0 transition group-hover:visible group-hover:opacity-100">
-                  <p className="truncate px-3 py-2 text-xs text-muted">{ctx.user.email}</p>
-                  <Button variant="ghost" size="sm" className="w-full justify-start" onClick={logout}>
-                    <LogOut size={14} /> Sign out
-                  </Button>
-                </div>
+                <AnimatePresence>
+                  {menu && (
+                    <>
+                      <div className="fixed inset-0 z-10" onClick={() => setMenu(false)} />
+                      <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 6 }} className="card absolute right-0 z-20 mt-2 w-60 rounded-xl p-1.5">
+                        <div className="px-3 py-2">
+                          <p className="truncate text-sm font-semibold text-ink">{ctx.user.name}</p>
+                          <p className="truncate text-xs text-muted">{ctx.user.email}</p>
+                          <p className="mt-1 truncate text-[11px] text-muted">{ctx.user.org?.name}</p>
+                        </div>
+                        <div className="my-1 h-px bg-line" />
+                        <Link href="/app/settings" onClick={() => setMenu(false)} className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-ink hover:bg-sky-soft"><Settings size={14} /> Settings & API</Link>
+                        <Link href="/app/contacts" onClick={() => setMenu(false)} className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-ink hover:bg-sky-soft"><Users size={14} /> Escalation contacts</Link>
+                        <div className="my-1 h-px bg-line" />
+                        <button onClick={logout} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-red hover:bg-red/5"><LogOut size={14} /> Sign out</button>
+                      </motion.div>
+                    </>
+                  )}
+                </AnimatePresence>
               </div>
             </div>
           </header>

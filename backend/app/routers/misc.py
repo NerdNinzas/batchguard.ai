@@ -77,9 +77,31 @@ def overview(org: dict[str, Any] = Depends(current_org)) -> dict[str, Any]:
     buckets = [0] * 24
     for i in day:
         buckets[min(23, int((t - i["opened_at"]) // 3600))] += 1
+    # per-machine sparkline of its first parameter (last 40 points) + primary latest values
+    sparks: dict[str, dict[str, Any]] = {}
+    for m in machines:
+        p = conn().execute("SELECT name, unit FROM parameters WHERE machine_id=? ORDER BY name LIMIT 1", (m["id"],)).fetchone()
+        if not p:
+            continue
+        pts = [r["value"] for r in conn().execute("SELECT value FROM readings WHERE machine_id=? AND parameter=? ORDER BY ts DESC LIMIT 40", (m["id"], p["name"])).fetchall()][::-1]
+        latest = {r["parameter"]: {"value": r["value"], "unit": r["unit"], "state": r["state"]} for r in conn().execute("SELECT * FROM latest WHERE machine_id=?", (m["id"],)).fetchall()}
+        sparks[m["id"]] = {"parameter": p["name"], "unit": p["unit"], "points": pts, "latest": latest}
+    ingest = [0] * 30
+    for r in conn().execute("SELECT received_at FROM readings WHERE received_at>=? AND machine_id IN (SELECT id FROM machines WHERE org_id=?)", (t - 1800, org["id"])).fetchall():
+        ingest[min(29, int((t - r["received_at"]) // 60))] += 1
+    recent = rows(conn().execute("SELECT i.id, i.severity, i.status, i.title, i.opened_at, i.report_source, i.machine_id, m.name machine_name FROM incidents i JOIN machines m ON m.id=i.machine_id WHERE i.org_id=? ORDER BY i.opened_at DESC LIMIT 6", (org["id"],)).fetchall())
+    runs = rows(conn().execute("SELECT r.source, r.ok, r.started_at, r.finished_at, i.title FROM agent_runs r JOIN incidents i ON i.id=r.incident_id WHERE i.org_id=? ORDER BY r.started_at DESC LIMIT 5", (org["id"],)).fetchall())
+    contacts = conn().execute("SELECT COUNT(*) n FROM contacts WHERE org_id=?", (org["id"],)).fetchone()["n"]
+    resolved_24h = sum(1 for i in day if i["status"] == "resolved")
     return {
         "machines": machines,
-        "counts": {"machines": len(machines), "online": sum(1 for m in machines if m["status"] not in ("offline", "stale")),
+        "sparks": sparks,
+        "ingest_per_minute": list(reversed(ingest)),
+        "recent_incidents": recent,
+        "agent_runs": runs,
+        "contacts": contacts,
+        "org": {"name": org["name"], "industry": org.get("industry"), "timezone": org.get("timezone")},
+        "counts": {"machines": len(machines), "online": sum(1 for m in machines if m["status"] not in ("offline", "stale")), "resolved_24h": resolved_24h,
                    "open_incidents": len(open_inc), "critical": sum(1 for i in open_inc if i["severity"] in ("critical", "emergency")),
                    "readings_per_min": rate, "mean_ack_seconds": round(sum(ack_times) / len(ack_times)) if ack_times else None},
         "open_incidents": [{**i, "signals": uj(i["signals"], []), "report": None} for i in open_inc[:10]],

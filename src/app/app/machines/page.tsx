@@ -1,4 +1,5 @@
 "use client";
+/* eslint-disable @next/next/no-img-element */
 
 import { ArrowRight, Plus } from "lucide-react";
 import Link from "next/link";
@@ -7,6 +8,7 @@ import { useApp } from "@/components/app/Shell";
 import { HealthRing } from "@/components/app/charts";
 import { Badge, Button, Empty, Spinner, StatusDot, statusTone } from "@/components/ui/Primitives";
 import { fmtAgo, get, type Machine } from "@/lib/api";
+import { machineType } from "@/lib/machineTypes";
 
 export default function MachinesPage() {
   const { subscribe } = useApp();
@@ -36,17 +38,20 @@ export default function MachinesPage() {
       </div>
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {machines.map((m) => (
-          <Link key={m.id} href={`/app/machines/${m.id}`} className="card rounded-2xl p-5 transition hover:border-blue/50">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
+          <Link key={m.id} href={`/app/machines/${m.id}`} className="card group overflow-hidden rounded-2xl transition hover:-translate-y-0.5 hover:border-blue/50">
+            <div className="relative h-36 overflow-hidden">
+              <img src={machineType(m.type)?.image ?? "/machines/conveyor.jpg"} alt="" className="h-full w-full object-cover transition duration-700 group-hover:scale-105" />
+              <div className="absolute inset-0 bg-gradient-to-t from-ink/85 via-ink/25 to-transparent" />
+              <div className="absolute right-3 top-3"><HealthRing value={m.health} size={48} /></div>
+              <div className="absolute bottom-2 left-4 right-4">
                 <div className="flex items-center gap-2">
                   <StatusDot status={m.status} />
-                  <p className="truncate font-display text-xl font-semibold text-ink">{m.name}</p>
+                  <p className="truncate font-display text-2xl font-semibold text-white">{m.name}</p>
                 </div>
-                <p className="font-mono text-[11px] text-muted">{m.device_id} · {m.type}{m.location ? ` · ${m.location}` : ""}</p>
+                <p className="font-mono text-[11px] text-white/75">{m.device_id} · {machineType(m.type)?.name ?? m.type}{m.location ? ` · ${m.location}` : ""}</p>
               </div>
-              <HealthRing value={m.health} size={52} />
             </div>
+            <div className="p-4">
             <div className="mt-3 flex flex-wrap gap-1.5">
               <Badge tone={statusTone(m.status)}>{m.status}</Badge>
               <Badge tone={m.verified ? "green" : "amber"}>{m.verified ? "verified" : "unverified"}</Badge>
@@ -63,6 +68,7 @@ export default function MachinesPage() {
                   </div>
                 );
               })}
+            </div>
             </div>
           </Link>
         ))}
