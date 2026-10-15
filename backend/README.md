@@ -24,7 +24,8 @@ app/
   bus.py             in-process pub/sub → SSE (/api/stream)
   agent/
     tools.py         7 ADK function tools (readings, baseline, events, neighbours, manual, history, correlation)
-    adk_agent.py     LlmAgent on Gemini with the tools; schema-validated IncidentReport; "ask" Q&A
+    adk_agent.py     6-stage SequentialAgent (context_builder → retriever → hypothesis_generator → evaluator →
+                     recommender → reporter) sharing session state; schema-validated IncidentReport; tool-grounded "ask"
     fallback.py      rule-based investigator on the same tools (used when Gemini is off / fails twice)
     schema.py        IncidentReport pydantic schema + number guardrail
     runner.py        orchestration: pick agent, guardrail, store, broadcast

@@ -8,7 +8,7 @@ import { fmtTime, get } from "@/lib/api";
 type Obs = {
   ingest_per_minute: number[];
   routes: { route: string; n: number; errors: number; p50_ms: number; p95_ms: number }[];
-  agent_runs: { id: string; title: string; source: string; ok: number; duration_s: number; tool_calls: { tool: string }[]; error?: string | null; started_at: number }[];
+  agent_runs: { id: string; title: string; source: string; ok: number; duration_s: number; tool_calls: { tool: string; stage?: string }[]; error?: string | null; started_at: number }[];
   stale_machines: { name: string; status: string }[];
   db_rows: Record<string, number>;
   config: { gemini: boolean; smtp: boolean; stale_after_s: number; cooldown_s: number; escalation_timeout_s: number };
@@ -52,7 +52,7 @@ export default function ObservabilityPage() {
             <tbody>{d.routes.map((r) => <tr key={r.route} className="border-t border-line"><td className="py-1.5 font-mono">{r.route}</td><td className="py-1.5 text-right">{r.n}</td><td className={`py-1.5 text-right ${r.errors ? "text-red" : ""}`}>{r.errors}</td><td className="py-1.5 text-right font-mono">{r.p50_ms} ms</td><td className="py-1.5 text-right font-mono">{r.p95_ms} ms</td></tr>)}</tbody></table>
         </Card>
         <Card title="Agent runs">
-          <div className="space-y-2">{d.agent_runs.map((r) => <div key={r.id} className="rounded-xl border border-line bg-white p-3 text-xs"><div className="flex items-center justify-between gap-2"><p className="truncate font-semibold text-ink">{r.title}</p><Badge tone={r.ok ? "green" : "red"}>{r.source}</Badge></div><p className="mt-1 font-mono text-[10px] text-muted">{fmtTime(r.started_at)} · {r.duration_s}s · {r.tool_calls.length ? r.tool_calls.map((t) => t.tool).join(" → ") : "no tool trace (rule-based)"}</p>{r.error && <p className="mt-1 text-red">{r.error.slice(0, 160)}</p>}</div>)}{d.agent_runs.length === 0 && <p className="text-sm text-muted">No runs yet.</p>}</div>
+          <div className="space-y-2">{d.agent_runs.map((r) => <div key={r.id} className="rounded-xl border border-line bg-white p-3 text-xs"><div className="flex items-center justify-between gap-2"><p className="truncate font-semibold text-ink">{r.title}</p><Badge tone={r.ok ? "green" : "red"}>{r.source}</Badge></div><p className="mt-1 font-mono text-[10px] text-muted">{fmtTime(r.started_at)} · {r.duration_s}s · {r.tool_calls.length ? r.tool_calls.map((t) => (t.stage ? `${t.stage}·${t.tool}` : t.tool)).join(" → ") : "no tool trace (rule-based)"}</p>{r.error && <p className="mt-1 text-red">{r.error.slice(0, 160)}</p>}</div>)}{d.agent_runs.length === 0 && <p className="text-sm text-muted">No runs yet.</p>}</div>
         </Card>
       </div>
       <Card title="Recent API log">
