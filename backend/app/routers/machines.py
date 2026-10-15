@@ -5,7 +5,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 
-from .. import bus
+from .. import bus, cloud
 from ..agent.extract import TEMPLATES, extract
 from ..auth import current_org, hash_api_key
 from ..config import settings
@@ -144,6 +144,7 @@ def create_machine(body: MachineIn, org: dict[str, Any] = Depends(current_org)) 
     key = _issue_key(mid) if verified else None
     m = _get(org["id"], mid)
     bus.publish(org["id"], "machine", {"id": mid, "status": "offline", "health": 100, "created": True})
+    cloud.mirror("machines", mid, {**_machine_out(m), "latest": {}})
     return {**_machine_out(m), "api_key": key, "endpoint": f"{settings.app_url.rstrip('/')}/v1/telemetry", "code": _code_samples(m, key)}
 
 
@@ -156,8 +157,9 @@ async def extract_manual(file: UploadFile = File(...), hint_type: str | None = F
     safe = "".join(ch if ch.isalnum() or ch in "._-" else "_" for ch in (file.filename or "manual.pdf"))
     path = settings.upload_path / f"{org['id']}_{int(now())}_{safe}"
     path.write_bytes(data)
+    gcs_uri = cloud.upload_manual(str(path), data, file.content_type or "application/pdf")
     spec, source = extract(data, file.filename or safe, file.content_type or "application/pdf", hint_type)
-    return {"spec": spec, "source": source, "manual_name": file.filename, "manual_path": str(path), "gemini_enabled": settings.gemini_enabled}
+    return {"spec": spec, "source": source, "manual_name": file.filename, "manual_path": gcs_uri or str(path), "gemini_enabled": settings.gemini_enabled}
 
 
 @router.get("/{mid}")
@@ -199,6 +201,7 @@ def verify(mid: str, body: VerifyIn, org: dict[str, Any] = Depends(current_org))
     key = _issue_key(mid)
     m = _get(org["id"], mid)
     bus.publish(org["id"], "machine", {"id": mid, "status": m["status"], "health": m["health"], "verified": True})
+    cloud.mirror("machines", mid, _machine_out(m))
     return {**_machine_out(m), "api_key": key, "endpoint": f"{settings.app_url.rstrip('/')}/v1/telemetry", "code": _code_samples(m, key)}
 
 
@@ -219,6 +222,7 @@ def delete_machine(mid: str, org: dict[str, Any] = Depends(current_org)) -> dict
             c.execute(f"DELETE FROM {t} WHERE machine_id=?", (mid,))
         c.execute("DELETE FROM machines WHERE id=?", (mid,))
     bus.publish(org["id"], "machine", {"id": mid, "deleted": True})
+    cloud.delete("machines", mid)
     return {"ok": True}
 
 
@@ -232,7 +236,9 @@ def readings(mid: str, parameter: str | None = None, seconds: int = 600, points:
         rs = conn().execute("SELECT ts, value FROM readings WHERE machine_id=? AND parameter=? AND ts>=? ORDER BY ts", (mid, p, t - seconds)).fetchall()
         step = max(1, len(rs) // points)
         out[p] = [{"t": r["ts"], "v": r["value"]} for r in rs[::step]]
-    return {"series": out, "now": t}
+        if seconds > 3600 and len(rs) < 10:  # history beyond local retention lives in BigQuery
+            out[p] = cloud.query_history(mid, p, seconds, points) or out[p]
+    return {"series": out, "now": t, "source": "bigquery" if seconds > 3600 and cloud.enabled() else "local"}
 
 
 @router.get("/{mid}/events")

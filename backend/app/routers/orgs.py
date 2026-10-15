@@ -3,6 +3,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
+from .. import cloud
 from ..auth import current_org, current_user
 from ..db import conn, j, row, rows, tx, uj
 from ..ids import new_id, now
@@ -57,7 +58,9 @@ def create_org(body: OrgIn, user: dict[str, Any] = Depends(current_user)) -> dic
         c.execute("INSERT INTO lines (id, org_id, name, created_at) VALUES (?,?,?,?)", (lid, oid, "Line A", now()))
         c.execute("INSERT INTO workflows (org_id, nodes, edges, updated_at) VALUES (?,?,?,?)", (oid, "[]", "[]", now()))
         c.execute("UPDATE users SET org_id=? WHERE id=?", (oid, user["id"]))
-    return _org_out(row(conn().execute("SELECT * FROM orgs WHERE id=?", (oid,)).fetchone()))
+    org = _org_out(row(conn().execute("SELECT * FROM orgs WHERE id=?", (oid,)).fetchone()))
+    cloud.mirror("orgs", oid, org)
+    return org
 
 
 @router.get("/org")
@@ -93,7 +96,9 @@ def add_contact(body: ContactIn, org: dict[str, Any] = Depends(current_org)) -> 
             "INSERT INTO contacts (id, org_id, name, role, phone, email, escalation_order, quiet_start, quiet_end, created_at) VALUES (?,?,?,?,?,?,?,?,?,?)",
             (cid, org["id"], body.name, body.role, body.phone, body.email, body.escalation_order, body.quiet_start, body.quiet_end, now()),
         )
-    return row(conn().execute("SELECT * FROM contacts WHERE id=?", (cid,)).fetchone())
+    c_ = row(conn().execute("SELECT * FROM contacts WHERE id=?", (cid,)).fetchone())
+    cloud.mirror("contacts", cid, c_)
+    return c_
 
 
 @router.put("/contacts/{cid}")

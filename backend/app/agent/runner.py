@@ -4,7 +4,7 @@ import json
 import traceback
 from typing import Any
 
-from .. import bus
+from .. import bus, cloud
 from ..config import settings
 from ..db import conn, j, row, tx, uj
 from ..ids import new_id, now
@@ -29,12 +29,16 @@ def investigate_async(incident_id: str) -> None:
     inc = row(conn().execute("SELECT * FROM incidents WHERE id=?", (incident_id,)).fetchone())
     if not inc:
         return
+    # one investigation at a time per incident: a run that started < 10 min ago and has not finished is still going
+    if conn().execute("SELECT 1 FROM agent_runs WHERE incident_id=? AND finished_at IS NULL AND started_at > ?", (incident_id, now() - 600)).fetchone():
+        return
     run_id = new_id("run")
     with tx() as c:
         c.execute("INSERT INTO agent_runs (id, incident_id, started_at, source) VALUES (?,?,?,?)", (run_id, incident_id, now(), "pending"))
     signals = uj(inc["signals"], [])
     source, calls, report, err = "fallback", [], None, None
-    if settings.gemini_enabled:
+    stale_only = bool(signals) and all(s.get("layer") == "stale" for s in signals)
+    if settings.gemini_enabled and not stale_only:
         try:
             from . import adk_agent
 
@@ -59,6 +63,7 @@ def investigate_async(incident_id: str) -> None:
             c.execute("UPDATE incidents SET report=?, report_source=? WHERE id=?", (j(report), source, incident_id))
     inc = row(conn().execute("SELECT * FROM incidents WHERE id=?", (incident_id,)).fetchone())
     bus.publish(inc["org_id"], "incident", {**inc, "signals": signals, "report": report})
+    cloud.mirror("incidents", incident_id, inc)
 
 
 def ask(incident_id: str, question: str) -> str:

@@ -3,11 +3,13 @@
 import threading
 from typing import Any
 
-from . import bus, notify
+from . import bus, cloud, notify
 from .config import settings
 from .db import conn, j, row, rows, tx, uj
 from .detection import Signal, health_score
 from .ids import new_id, now
+
+_STARTED_AT = now()
 
 SEVERITY_RANK = {"info": 0, "warning": 1, "critical": 2, "emergency": 3}
 
@@ -45,6 +47,7 @@ def _update_machine_status(machine_id: str) -> None:
     with tx() as c:
         c.execute("UPDATE machines SET status=?, health=? WHERE id=?", (status, health_score(machine_id), machine_id))
     bus.publish(m["org_id"], "machine", {"id": machine_id, "status": status, "health": health_score(machine_id)})
+    cloud.mirror("machines", machine_id, {"status": status, "health": health_score(machine_id), "org_id": m["org_id"]})
 
 
 def handle_signals(machine_id: str, signals: list[Signal]) -> None:
@@ -82,6 +85,7 @@ def handle_signals(machine_id: str, signals: list[Signal]) -> None:
         inc = row(conn().execute("SELECT * FROM incidents WHERE id=?", (inc_id,)).fetchone())
         _update_machine_status(machine_id)
         bus.publish(m["org_id"], "incident", {**inc, "signals": sigs})
+        cloud.mirror("incidents", inc["id"], inc)
         notify.on_incident_opened(inc, m)
         _kick_agent(inc_id)
         return
@@ -106,6 +110,7 @@ def handle_signals(machine_id: str, signals: list[Signal]) -> None:
     inc = row(conn().execute("SELECT * FROM incidents WHERE id=?", (inc["id"],)).fetchone())
     _update_machine_status(machine_id)
     bus.publish(m["org_id"], "incident", {**inc, "signals": existing})
+    cloud.mirror("incidents", inc["id"], inc)
     if SEVERITY_RANK[new_sev] > SEVERITY_RANK[old_sev]:
         notify.on_incident_escalated(inc, m)
         _kick_agent(inc["id"])
@@ -170,9 +175,18 @@ def escalation_sweep() -> None:
         notify.on_incident_escalated(inc, m, level=level)
 
 
+def resume_from_stale(machine_id: str) -> None:
+    """Telemetry is back: a stale-only incident closes itself; anything else stays open."""
+    inc = _open_incident_for(machine_id)
+    if inc and all(sig.get("layer") == "stale" for sig in uj(inc["signals"], [])):
+        resolve(inc["id"], {"verdict": "auto", "actual_cause": "telemetry resumed", "fix": "auto-resolved"})
+
+
 def staleness_sweep() -> None:
     """Machines that stop posting for STALE_AFTER_SECONDS become 'stale' and open an incident."""
     t = now()
+    if t - _STARTED_AT < 30:  # grace after a restart: devices reconnect, the demo producer warms up
+        return
     for m in rows(conn().execute("SELECT * FROM machines WHERE verified=1").fetchall()):
         if m["last_seen"] is None:
             continue
@@ -188,3 +202,4 @@ def staleness_sweep() -> None:
             with tx() as c:
                 c.execute("UPDATE machines SET status='normal' WHERE id=?", (m["id"],))
             _update_machine_status(m["id"])
+            resume_from_stale(m["id"])

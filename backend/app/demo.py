@@ -42,8 +42,8 @@ PROFILES: dict[str, dict[str, tuple[float, float]]] = {
 }
 
 # fault cycle on the conveyor: normal → ramp → hold → recover, repeated
-CYCLE = 720
-RAMP_START, RAMP_END, HOLD_END, RECOVER_END = 300, 420, 480, 540
+CYCLE = 1800
+RAMP_START, RAMP_END, HOLD_END, RECOVER_END = 900, 1020, 1140, 1200
 
 
 def ensure_seeded() -> dict[str, Any] | None:

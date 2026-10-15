@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -21,6 +22,15 @@ class Settings(BaseSettings):
     google_cloud_location: str = "us-central1"
     gemini_model_fast: str = "gemini-2.5-flash"
     gemini_model_pro: str = "gemini-2.5-pro"
+
+    gcp_project: str = ""
+    gcp_location: str = "asia-southeast1"
+    google_application_credentials: str = ""
+    firestore_database: str = ""
+    cloud_logging: bool = True
+    gcs_bucket: str = ""
+    pubsub_topic_telemetry: str = "telemetry"
+    bigquery_dataset: str = "batchguard"
 
     smtp_host: str = ""
     smtp_port: int = 587
@@ -52,3 +62,14 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+# google-genai / ADK / google-cloud clients read these from the process environment, not from .env
+for _k, _v in {
+    "GOOGLE_GENAI_USE_VERTEXAI": "true" if settings.google_genai_use_vertexai else "false",
+    "GOOGLE_CLOUD_PROJECT": settings.google_cloud_project or settings.gcp_project,
+    "GOOGLE_CLOUD_LOCATION": settings.google_cloud_location,
+    "GOOGLE_API_KEY": settings.google_api_key,
+    "GOOGLE_APPLICATION_CREDENTIALS": str((BASE_DIR / settings.google_application_credentials).resolve()) if settings.google_application_credentials else "",
+}.items():
+    if _v and not os.environ.get(_k):
+        os.environ[_k] = _v

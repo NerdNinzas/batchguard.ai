@@ -22,6 +22,9 @@ app/
   incidents.py       open/attach with cooldown & grouping, severity ladder, ack/resolve, escalation + staleness sweeps
   notify.py          in-app + email (SMTP or simulated); voice is planned (TeleCMI + Gemini Live)
   bus.py             in-process pub/sub → SSE (/api/stream)
+  cloud.py           Firestore mirror · Pub/Sub→BigQuery · BigQuery history · Cloud Storage · Cloud Logging (all fail-soft)
+  demo.py            seeded demo factory + built-in telemetry producer (DEMO_MODE)
+  ingest.py          shared ingestion path (device API + demo producer)
   agent/
     tools.py         7 ADK function tools (readings, baseline, events, neighbours, manual, history, correlation)
     adk_agent.py     6-stage SequentialAgent (context_builder → retriever → hypothesis_generator → evaluator →
@@ -38,6 +41,7 @@ app/
     incidents.py     /api/incidents (+ ack, resolve, investigate, ask)
     misc.py          notifications, workflow, overview, observability, telemetry snapshots, eval, SSE
 scripts/device_sample.py   reference device client with fault injection
+scripts/trigger_fault.py   quick bearing-wear trigger for testing the agent pipeline
 ```
 
 Without `GOOGLE_API_KEY` the rule-based investigator and template extraction run, so the whole loop works offline.

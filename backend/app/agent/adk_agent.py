@@ -4,8 +4,8 @@ Six stages, as in the PRD, as a SequentialAgent. Each stage writes its result to
 state (output_key) and the next stage reads it through instruction templating ({context},
 {manual}, ...). Tools are plain functions from tools.py; none can change a machine.
 
-    context_builder  → readings, baselines, events, neighbours, history   (tools)
-    retriever        → troubleshooting / maintenance passages from the manual (tools)
+    gather (parallel): context_builder → readings, baselines, events, neighbours, history (tools)
+                       retriever       → troubleshooting / maintenance passages from the manual (tools)
     hypothesis_gen   → 3–5 candidate causes tied to observations
     evaluator        → evidence for / against / missing per cause, correlations (tools)
     recommender      → ordered, discriminating checks with safety notes
@@ -38,14 +38,15 @@ def _pro() -> str:
 
 
 def build_pipeline():
-    from google.adk.agents import LlmAgent, SequentialAgent
+    from google.adk.agents import LlmAgent, ParallelAgent, SequentialAgent
 
     context_builder = LlmAgent(
         name="context_builder",
         model=_fast(),
         description="Collects the incident window: readings, baselines, events, neighbours, past incidents.",
         instruction=(
-            "An incident opened on machine '{machine_id}' with severity '{severity}'. Triggering signals:\n{signals}\n\n"
+            "An incident opened on machine '{machine_name}' ({machine_type}, id '{machine_id}') with severity '{severity}'. "
+            "Always refer to the machine by its name, '{machine_name}'. Triggering signals:\n{signals}\n\n"
             "Gather context with the tools: get_readings for ALL of these parameters over 300 s: {parameters}; "
             "get_baseline for each triggering parameter; get_events (900 s); get_line_neighbours; get_past_incidents. "
             "Then write a compact factual summary (bullet points with numbers and units) of what moved, when, how fast, "
@@ -60,8 +61,9 @@ def build_pipeline():
         model=_fast(),
         description="Pulls the relevant troubleshooting and maintenance passages from the machine's own manual.",
         instruction=(
-            "Context so far:\n{context}\n\nBuild 2–3 short queries from the symptoms (e.g. 'bearing vibration temperature', "
-            "'belt slip current') and call get_manual_sections for machine '{machine_id}' with each. "
+            "Incident on '{machine_name}' (id '{machine_id}'), severity '{severity}'. Triggering signals:\n{signals}\n\n"
+            "Build at most 3 short queries from the symptoms (e.g. 'bearing vibration temperature', "
+            "'belt slip current') and call get_manual_sections for machine '{machine_id}' once per query — no more than 3 calls in total. "
             "Return the relevant passages verbatim with their titles and page numbers, and one line on why each is relevant. " + RULES
         ),
         tools=[tools.get_manual_sections],
@@ -70,7 +72,7 @@ def build_pipeline():
 
     hypothesis_generator = LlmAgent(
         name="hypothesis_generator",
-        model=_pro(),
+        model=_fast(),
         description="Proposes 3–5 candidate causes, each tied to specific observations.",
         instruction=(
             "Context:\n{context}\n\nManual passages:\n{manual}\n\n"
@@ -114,7 +116,8 @@ def build_pipeline():
         model=_fast(),
         description="Writes the schema-validated incident report and the phone script.",
         instruction=(
-            "Severity: {severity}. Context:\n{context}\n\nEvaluation:\n{evaluation}\n\nChecks:\n{checks}\n\n"
+            "Machine: '{machine_name}' (refer to it by this name, never by id). Severity: {severity}. Context:\n{context}\n\n"
+            "Evaluation:\n{evaluation}\n\nChecks:\n{checks}\n\n"
             "Produce the IncidentReport: a 2-sentence summary, a short timeline, the ranked causes with their evidence lists and "
             "missing data, the checks in order, overall missing data, cross_machine note if an upstream/downstream machine is "
             "involved, and a call_script of at most 20 seconds of speech: machine, problem, first check, 'press 1 to acknowledge'. " + RULES
@@ -123,10 +126,11 @@ def build_pipeline():
         output_key="report",
     )
 
+    gather = ParallelAgent(name="gather", description="Collects context and manual passages concurrently", sub_agents=[context_builder, retriever])
     return SequentialAgent(
         name="batchguard_investigation",
         description="Evidence-backed fault investigation over factory telemetry",
-        sub_agents=[context_builder, retriever, hypothesis_generator, evaluator, recommender, reporter],
+        sub_agents=[gather, hypothesis_generator, evaluator, recommender, reporter],
     )
 
 
@@ -158,8 +162,11 @@ def _coerce(report: Any) -> dict[str, Any]:
 def investigate(machine_id: str, signals: list[dict[str, Any]], severity: str) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     """Returns (validated report dict, tool trace with stage names). Raises after one retry."""
     params = [r["name"] for r in tools.conn().execute("SELECT name FROM parameters WHERE machine_id=?", (machine_id,)).fetchall()]
+    m = tools.conn().execute("SELECT name, type FROM machines WHERE id=?", (machine_id,)).fetchone()
     state = {
         "machine_id": machine_id,
+        "machine_name": m["name"] if m else machine_id,
+        "machine_type": m["type"] if m else "machine",
         "severity": severity,
         "signals": "\n".join(f"- {s.get('layer')}: {s.get('message')}" for s in signals),
         "parameters": ", ".join(params),

@@ -10,3 +10,9 @@ google-auth
 requests
 sse-starlette
 numpy
+google-cloud-firestore
+google-cloud-bigquery
+google-cloud-storage
+google-cloud-pubsub
+google-cloud-texttospeech
+google-cloud-logging

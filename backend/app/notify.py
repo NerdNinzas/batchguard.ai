@@ -4,7 +4,7 @@ import smtplib
 from email.message import EmailMessage
 from typing import Any
 
-from . import bus
+from . import bus, cloud
 from .config import settings
 from .db import conn, rows, tx
 from .ids import new_id, now
@@ -35,6 +35,7 @@ def _record(org_id: str, incident_id: str | None, channel: str, contact: dict[st
             n,
         )
     bus.publish(org_id, "notification", n)
+    cloud.mirror("notifications", n["id"], n)
     return n
 
 

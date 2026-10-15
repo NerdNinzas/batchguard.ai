@@ -2,11 +2,11 @@
 
 from typing import Any
 
-from . import bus
+from . import bus, cloud
 from .db import conn, tx
 from .detection import Signal, limit_state, run_detection
 from .ids import now
-from .incidents import handle_signals
+from .incidents import handle_signals, resume_from_stale
 
 
 def ingest_readings(m: dict[str, Any], readings: list[dict[str, Any]]) -> dict[str, Any]:
@@ -46,7 +46,10 @@ def ingest_readings(m: dict[str, Any], readings: list[dict[str, Any]]) -> dict[s
         if r["parameter"] in latest_payload:
             signals += run_detection(m["id"], r["parameter"], r["value"], r.get("unit"), t)
     bus.publish(m["org_id"], "telemetry", {"machine_id": m["id"], "device_id": m["device_id"], "latest": latest_payload, "ts": t})
+    cloud.mirror_latest(m["id"], m["org_id"], latest_payload)
+    cloud.publish_readings(m, [{**r, "state": latest_payload[r["parameter"]]["state"]} for r in readings if r["parameter"] in latest_payload], t)
     if was_offline:
         bus.publish(m["org_id"], "machine", {"id": m["id"], "status": "normal", "health": m["health"]})
+        resume_from_stale(m["id"])
     handle_signals(m["id"], signals)
     return {"accepted": accepted, "rejected": rejected, "duplicates": duplicates, "signals": [s.as_dict() for s in signals]}

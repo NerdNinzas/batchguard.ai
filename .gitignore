@@ -46,3 +46,7 @@ backend/.venv/
 backend/.env
 backend/__pycache__/
 backend/**/__pycache__/
+
+# GCP service-account keys — never commit
+backend/secrets/
+*.sa.json

@@ -32,6 +32,31 @@ Without any Google Cloud credentials everything still works: Gemini falls back t
 extraction, Google sign-in is replaced by email/password, and emails are recorded as "simulated". Add keys to the two
 `.env` files to switch each integration on. Voice escalation (TeleCMI + Gemini Live) is planned and not wired.
 
+## Google Cloud
+
+Project `batchguard-ai-33e4` (asia-southeast1). What runs where:
+
+| Service | Used for | Where in code |
+|---|---|---|
+| Vertex AI — Gemini 2.5 Flash/Pro (`global`) | ADK investigation pipeline, "ask the agent", manual extraction | `backend/app/agent/` |
+| Agent Development Kit | `SequentialAgent`(gather ‖ → hypotheses → evaluator → recommender → reporter) | `backend/app/agent/adk_agent.py` |
+| Firestore | live operational mirror: machines + latest values, incidents, notifications, orgs, contacts | `backend/app/cloud.py` |
+| Pub/Sub → BigQuery | every reading is published to `telemetry`; a BigQuery subscription writes `batchguard.telemetry` (partitioned, no code) | `cloud.publish_readings` |
+| BigQuery | history beyond local retention for charts and the agent's `get_readings` | `cloud.query_history` |
+| Cloud Storage | uploaded manuals / datasheets (`gs://<project>-manuals`) | `cloud.upload_manual` |
+| Cloud Logging | structured backend + ADK logs | `cloud.setup_logging` |
+| Cloud Run | backend (always-on, 1 instance) + frontend (scale-to-zero) | `deploy.sh`, `Dockerfile`s |
+| Secret Manager | `AUTH_SECRET` | `deploy.sh` |
+
+Local dev talks to the same project through `backend/secrets/sa.json` (git-ignored). Everything degrades to local-only
+when `GCP_PROJECT` is empty.
+
+## Deploy
+
+```bash
+./deploy.sh            # builds both images with Cloud Build and deploys to Cloud Run
+```
+
 ## Flow
 
 sign up → onboarding modals (organisation, use cases, escalation contacts; Muse guides each step) → dashboard →

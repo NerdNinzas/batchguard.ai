@@ -8,6 +8,7 @@ from typing import Any
 
 import numpy as np
 
+from .. import cloud
 from ..db import conn, rows, uj
 from ..detection import baseline as _baseline
 from ..ids import now
@@ -36,6 +37,9 @@ def get_readings(machine: str, parameters: list[str], window_seconds: int = 300)
             "SELECT ts, value, unit FROM readings WHERE machine_id=? AND parameter=? AND ts>=? ORDER BY ts",
             (mid, p, t - window_seconds),
         ).fetchall()
+        if not rs and window_seconds > 3600:
+            hist = cloud.query_history(mid, p, window_seconds, 400)
+            rs = [{"ts": h["t"], "value": h["v"], "unit": None} for h in hist]
         if not rs:
             out[p] = {"n": 0}
             continue
@@ -168,9 +172,11 @@ def compute_correlation(machine: str, a: str, b: str, window_seconds: int = 600)
         return {"error": "windows do not overlap"}
     ia = np.interp(grid, ta, va)
     ib = np.interp(grid, tb, vb)
-    ia = (ia - ia.mean()) / (ia.std() or 1)
-    ib = (ib - ib.mean()) / (ib.std() or 1)
-    best_lag, best_r = 0, float(np.corrcoef(ia, ib)[0, 1])
+    if ia.std() < 1e-9 or ib.std() < 1e-9:
+        return {"a": a, "b": b, "error": "one of the signals has no variance in this window — correlation undefined"}
+    ia = (ia - ia.mean()) / ia.std()
+    ib = (ib - ib.mean()) / ib.std()
+    best_lag, best_r = 0, float(np.nan_to_num(np.corrcoef(ia, ib)[0, 1]))
     max_lag = min(300, len(grid) // 3)
     for lag in range(-max_lag, max_lag + 1, 5):
         if lag > 0:
@@ -184,4 +190,29 @@ def compute_correlation(machine: str, a: str, b: str, window_seconds: int = 600)
     return {"a": a, "b": b, "r": round(best_r, 3), "lag_seconds": best_lag, "interpretation": f"{a} leads {b} by {best_lag}s" if best_lag > 0 else f"{b} leads {a} by {-best_lag}s" if best_lag < 0 else "no lead/lag"}
 
 
+def _finite(v: Any) -> Any:
+    """Replace NaN/inf with None recursively so tool results are always valid JSON."""
+    if isinstance(v, float):
+        return v if np.isfinite(v) else None
+    if isinstance(v, dict):
+        return {k: _finite(x) for k, x in v.items()}
+    if isinstance(v, list):
+        return [_finite(x) for x in v]
+    return v
+
+
+def _wrap(fn):
+    def inner(*args, **kwargs):
+        return _finite(fn(*args, **kwargs))
+
+    inner.__name__ = fn.__name__
+    inner.__doc__ = fn.__doc__
+    inner.__annotations__ = fn.__annotations__
+    inner.__signature__ = __import__("inspect").signature(fn)  # ADK builds the schema from the signature
+    return inner
+
+
+get_readings, get_baseline, get_events, get_line_neighbours, get_manual_sections, get_past_incidents, compute_correlation = (
+    _wrap(get_readings), _wrap(get_baseline), _wrap(get_events), _wrap(get_line_neighbours), _wrap(get_manual_sections), _wrap(get_past_incidents), _wrap(compute_correlation)
+)
 ALL_TOOLS = [get_readings, get_baseline, get_events, get_line_neighbours, get_manual_sections, get_past_incidents, compute_correlation]
