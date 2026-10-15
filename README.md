@@ -32,6 +32,11 @@ Without any Google Cloud credentials everything still works: Gemini falls back t
 extraction, Google sign-in is replaced by email/password, and emails are recorded as "simulated". Add keys to the two
 `.env` files to switch each integration on. Voice escalation (TeleCMI + Gemini Live) is planned and not wired.
 
+## Live
+
+- App: https://batchguard-frontend-6our3ivvha-as.a.run.app (demo login `demo@batchguard.ai` / `demo1234`)
+- API: https://batchguard-backend-6our3ivvha-as.a.run.app (`/api/health`, device API at `/v1/telemetry`)
+
 ## Google Cloud
 
 Project `batchguard-ai-33e4` (asia-southeast1). What runs where:
