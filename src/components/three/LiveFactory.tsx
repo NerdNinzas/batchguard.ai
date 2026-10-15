@@ -1,7 +1,7 @@
 "use client";
 
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { Clone, ContactShadows, Environment, Lightformer, OrbitControls, useGLTF } from "@react-three/drei";
+import { Clone, ContactShadows, Environment, OrbitControls, useGLTF, useTexture } from "@react-three/drei";
 import { Suspense, useMemo, useRef, type MutableRefObject } from "react";
 import * as THREE from "three";
 import type { Latest, Machine } from "@/lib/api";
@@ -9,7 +9,7 @@ import type { Latest, Machine } from "@/lib/api";
 /** 3D view of the onboarded machines, placed in workflow order, coloured by live status. */
 
 const KIT = "/models/factory/";
-const K = 1.5;
+const K = 2.1;
 const FLOOR = 0;
 const HEALTH_HEX: Record<string, string> = { normal: "#16c784", warning: "#f59e0b", critical: "#ef4444", emergency: "#ef4444", stale: "#f59e0b", offline: "#9fb0c8" };
 const MODEL_BY_TYPE: Record<string, { name: string; scale?: number; y?: number; rot?: number }> = {
@@ -19,9 +19,63 @@ const MODEL_BY_TYPE: Record<string, { name: string; scale?: number; y?: number; 
 
 function Kit({ name, position = [0, 0, 0], scale = K, rotation = [0, 0, 0] }: { name: string; position?: [number, number, number]; scale?: number; rotation?: [number, number, number] }) {
   const { scene } = useGLTF(`${KIT}${name}.glb`);
+  useMemo(() => {
+    // the kit ships flat-shaded colours; make them painted metal so the HDRI lights them
+    scene.traverse((o) => {
+      const m = (o as THREE.Mesh).material as THREE.MeshStandardMaterial | undefined;
+      if (m && "metalness" in m && !(m as unknown as { _bg?: boolean })._bg) {
+        m.metalness = 0.35;
+        m.roughness = 0.5;
+        m.envMapIntensity = 1.1;
+        (m as unknown as { _bg?: boolean })._bg = true;
+      }
+    });
+  }, [scene]);
   return <Clone object={scene} position={position} scale={scale} rotation={rotation} castShadow receiveShadow />;
 }
 Object.values(MODEL_BY_TYPE).forEach((m) => useGLTF.preload(`${KIT}${m.name}.glb`));
+
+/* Photoscanned CC0 props from Poly Haven (real-world metres). */
+const PH = "/models/ph/";
+const PROPS: { id: string; file: string; position: [number, number, number]; rotation?: number; scale?: number }[] = [
+  { id: "industrial_storage_cart", file: "industrial_storage_cart_1k.gltf", position: [-9.5, 0, 3.2], rotation: 0.6 },
+  { id: "metal_tool_chest", file: "metal_tool_chest_1k.gltf", position: [-11.5, 0, -2.2], rotation: 1.5 },
+  { id: "barrel_03", file: "barrel_03_1k.gltf", position: [10.5, 0, -2.4] },
+  { id: "barrel_03", file: "barrel_03_1k.gltf", position: [11.4, 0, -1.6], rotation: 1.1 },
+  { id: "cardboard_box_01", file: "cardboard_box_01_1k.gltf", position: [9.8, 0, 3.4], rotation: 0.3 },
+  { id: "cardboard_box_01", file: "cardboard_box_01_1k.gltf", position: [10.4, 0, 3.9], rotation: -0.4 },
+  { id: "hand_truck", file: "hand_truck_1k.gltf", position: [12.2, 0, 3.2], rotation: -1.2 },
+  { id: "industrial_pastic_container", file: "industrial_pastic_container_1k.gltf", position: [-8.3, 0, 4.4], rotation: 0.2 },
+  { id: "korean_fire_extinguisher_01", file: "korean_fire_extinguisher_01_1k.gltf", position: [-12.6, 0, 0.6] },
+  { id: "WetFloorSign_01", file: "WetFloorSign_01_1k.gltf", position: [-3.5, 0, 4.6], rotation: 0.4 },
+  { id: "drill_press_01", file: "drill_press_01_1k.gltf", position: [-13.2, 0, -3.6], rotation: 0.9 },
+  { id: "metal_trash_can", file: "metal_trash_can_1k.gltf", position: [13.6, 0, -0.4] },
+  { id: "ladder_sectioned_01", file: "ladder_sectioned_01_1k.gltf", position: [13.2, 0, -3.8], rotation: 0.5 },
+];
+function Prop({ file, position, rotation = 0, scale = 1 }: { file: string; position: [number, number, number]; rotation?: number; scale?: number }) {
+  const { scene } = useGLTF(`${PH}${file.replace("_1k.gltf", "")}/${file}`);
+  return <Clone object={scene} position={position} rotation={[0, rotation, 0]} scale={scale} castShadow receiveShadow />;
+}
+PROPS.forEach((p) => useGLTF.preload(`${PH}${p.id}/${p.file}`));
+
+/* Real concrete floor (Poly Haven CC0, 1k PBR maps). */
+function ConcreteFloor() {
+  const [map, rough, normal, ao] = useTexture(["/textures/floor/diffuse.jpg", "/textures/floor/rough.jpg", "/textures/floor/nor_gl.jpg", "/textures/floor/ao.jpg"]);
+  useMemo(() => {
+    for (const t of [map, rough, normal, ao]) {
+      t.wrapS = t.wrapT = THREE.RepeatWrapping;
+      t.repeat.set(16, 16);
+      t.anisotropy = 8;
+    }
+    map.colorSpace = THREE.SRGBColorSpace;
+  }, [map, rough, normal, ao]);
+  return (
+    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.01, 0]} receiveShadow>
+      <planeGeometry args={[80, 80]} />
+      <meshStandardMaterial map={map} roughnessMap={rough} normalMap={normal} aoMap={ao} color="#c9ced6" roughness={0.6} metalness={0.1} normalScale={new THREE.Vector2(0.45, 0.45)} envMapIntensity={1.0} />
+    </mesh>
+  );
+}
 ["conveyor-long", "conveyor-long-sides", "machine-connection-pipe", "box-small", "structure-window-wide", "pipe-large-long", "warning-orange"].forEach((n) => useGLTF.preload(`${KIT}${n}.glb`));
 
 function Lamp({ status, position }: { status: string; position: [number, number, number] }) {
@@ -47,15 +101,15 @@ function MachineBlock({ m, x }: { m: Machine; x: number }) {
     <group position={[x, FLOOR, 0]}>
       {m.type === "conveyor" ? (
         <>
-          <Kit name="conveyor-long-sides" position={[-1.5, 0, 0]} />
-          <Kit name="conveyor-long-sides" position={[1.5, 0, 0]} />
-          <Kit name="machine-connection-pipe" position={[0, 0, -1.6]} scale={K * 0.9} />
+          <Kit name="conveyor-long-sides" position={[-2.1, 0, 0]} />
+          <Kit name="conveyor-long-sides" position={[2.1, 0, 0]} />
+          <Kit name="machine-connection-pipe" position={[0, 0, -2.2]} scale={K * 0.9} />
         </>
       ) : (
         <Kit name={spec.name} scale={K * (spec.scale ?? 1)} position={[0, spec.y ?? 0, 0]} rotation={[0, spec.rot ?? 0, 0]} />
       )}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.01, 0]}><ringGeometry args={[m.type === "conveyor" ? 3.2 : 1.5, m.type === "conveyor" ? 3.32 : 1.62, 64]} /><meshBasicMaterial color={c} transparent opacity={0.6} /></mesh>
-      <Lamp status={m.status} position={[m.type === "conveyor" ? 2.6 : 1.1, m.type === "conveyor" ? 0.6 : 1.4, 0.9]} />
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.01, 0]}><ringGeometry args={[m.type === "conveyor" ? 4.4 : 2.1, m.type === "conveyor" ? 4.52 : 2.22, 64]} /><meshBasicMaterial color={c} transparent opacity={0.6} /></mesh>
+      <Lamp status={m.status} position={[m.type === "conveyor" ? 3.4 : 1.5, m.type === "conveyor" ? 0.9 : 2.0, 1.2]} />
     </group>
   );
 }
@@ -87,52 +141,62 @@ function Boxes({ count, length }: { count: number; length: number }) {
     t.current += dt * 0.08;
     refs.current.forEach((g, i) => { if (g) g.position.x = -length / 2 + ((offsets[i] + t.current) % 1) * length; });
   });
-  return <>{offsets.map((_, i) => <group key={i} ref={(el) => el && (refs.current[i] = el)} position={[0, 0.62, 0]}><Kit name="box-small" scale={0.8} /></group>)}</>;
+  return <>{offsets.map((_, i) => <group key={i} ref={(el) => el && (refs.current[i] = el)} position={[0, 0.4 * K + 0.02, 0]}><Kit name="box-small" scale={1.1} /></group>)}</>;
 }
 
 function Scene({ machines, labels }: { machines: Machine[]; labels: MutableRefObject<Record<string, HTMLDivElement | null>> }) {
-  const gap = 6.2;
+  const gap = 7.4;
   const total = Math.max(1, machines.length);
   const width = total * gap;
-  const floorTex = useMemo(() => {
-    const c = document.createElement("canvas"); c.width = c.height = 256; const g = c.getContext("2d")!;
-    g.fillStyle = "#e3e8f0"; g.fillRect(0, 0, 256, 256); g.strokeStyle = "rgba(60,80,110,.16)"; g.lineWidth = 2;
-    for (let i = 0; i <= 256; i += 64) { g.beginPath(); g.moveTo(i, 0); g.lineTo(i, 256); g.moveTo(0, i); g.lineTo(256, i); g.stroke(); }
-    const tx = new THREE.CanvasTexture(c); tx.wrapS = tx.wrapT = THREE.RepeatWrapping; tx.repeat.set(20, 20); tx.colorSpace = THREE.SRGBColorSpace; return tx;
-  }, []);
   return (
     <>
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.01, 0]} receiveShadow><planeGeometry args={[80, 80]} /><meshStandardMaterial map={floorTex} roughness={0.6} /></mesh>
+      <ConcreteFloor />
+      {/* painted walkway line in front of the line */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.002, 5.4]}><planeGeometry args={[width + 10, 0.12]} /><meshStandardMaterial color="#f5b400" roughness={0.9} /></mesh>
       {/* connecting belt between machines */}
-      {machines.length > 1 && Array.from({ length: Math.ceil(width / 3) }, (_, i) => <Kit key={i} name="conveyor-long" position={[-width / 2 + 1.5 + i * 3, 0, 2.4]} />)}
-      {machines.length > 1 && <group position={[0, 0, 2.4]}><Boxes count={Math.min(12, total * 2)} length={width} /></group>}
+      {machines.length > 1 && Array.from({ length: Math.ceil(width / (2 * K)) }, (_, i) => <Kit key={i} name="conveyor-long" position={[-width / 2 + K + i * 2 * K, 0, 3.2]} />)}
+      {machines.length > 1 && <group position={[0, 0, 3.2]}><Boxes count={Math.min(12, total * 2)} length={width} /></group>}
       {machines.map((m, i) => <MachineBlock key={m.id} m={m} x={-width / 2 + gap / 2 + i * gap} />)}
-      <LabelProjector anchors={machines.map((m, i) => ({ id: m.id, x: -width / 2 + gap / 2 + i * gap, y: m.type === "conveyor" ? 1.4 : 3.2 }))} labels={labels} />
-      {/* backdrop */}
-      {Array.from({ length: Math.ceil(width / 3) + 2 }, (_, i) => <Kit key={i} name="structure-window-wide" position={[-width / 2 - 3 + i * 3, 0, -5]} />)}
-      {Array.from({ length: Math.ceil(width / 2) + 2 }, (_, i) => <Kit key={i} name="pipe-large-long" position={[-width / 2 - 2 + i * 2, 4.4, -4]} scale={1} />)}
+      <LabelProjector anchors={machines.map((m, i) => ({ id: m.id, x: -width / 2 + gap / 2 + i * gap, y: m.type === "conveyor" ? 2.0 : 4.4 }))} labels={labels} />
+      {/* hall: windowed back wall, ceiling beams, caged lights over the line (Poly Haven CC0) */}
+      {Array.from({ length: Math.ceil((width + 16) / (2 * K)) }, (_, i) => <Kit key={`w${i}`} name="structure-window-wide" position={[-(width + 16) / 2 + K + i * 2 * K, 0, -8.5]} />)}
+      {Array.from({ length: Math.ceil((width + 16) / 5) }, (_, i) => (
+        <mesh key={`b${i}`} position={[-(width + 16) / 2 + 2.5 + i * 5, 7.4, -1.5]} castShadow>
+          <boxGeometry args={[0.35, 0.5, 14]} />
+          <meshStandardMaterial color="#3b4556" metalness={0.6} roughness={0.5} />
+        </mesh>
+      ))}
+      {machines.map((m, i) => {
+        const x = -width / 2 + gap / 2 + i * gap;
+        return (
+          <group key={`l${m.id}`} position={[x, 7.2, 1.2]}>
+            <Prop file="caged_hanging_light_1k.gltf" position={[0, 0, 0]} scale={1.6} />
+            <pointLight position={[0, -1.4, 0]} intensity={60} distance={16} decay={2} color="#fff1dc" castShadow={i % 2 === 0} shadow-bias={-0.002} />
+          </group>
+        );
+      })}
+      {/* photoscanned props around the line */}
+      {PROPS.map((p, i) => <Prop key={i} file={p.file} position={[p.position[0] * (width / 37), p.position[1], p.position[2] * 1.25]} rotation={p.rotation} scale={p.scale} />)}
       <Kit name="warning-orange" position={[-width / 2 - 1.5, 0, 3.6]} />
-      <Kit name="warning-orange" position={[width / 2 + 1.5, 0, 3.6]} />
     </>
   );
 }
 
 export default function LiveFactory({ machines, latest }: { machines: Machine[]; latest: Record<string, Latest> }) {
-  const width = Math.max(1, machines.length) * 6.2;
+  const width = Math.max(1, machines.length) * 7.4;
   const labels = useRef<Record<string, HTMLDivElement | null>>({});
   return (
     <div className="relative h-full w-full">
-    <Canvas shadows dpr={[1, 1.75]} camera={{ position: [0, 7, width * 0.55 + 9], fov: 40 }} gl={{ antialias: true, alpha: true, toneMapping: THREE.ACESFilmicToneMapping }} style={{ background: "linear-gradient(180deg,#ffffff,#eaf3ff)" }}>
-      <ambientLight intensity={0.45} />
-      <directionalLight position={[6, 12, 6]} intensity={2} castShadow shadow-mapSize={[2048, 2048]} shadow-camera-left={-20} shadow-camera-right={20} shadow-camera-top={20} shadow-camera-bottom={-20} />
-      <Environment resolution={256}>
-        <Lightformer intensity={2.5} position={[0, 6, 0]} rotation={[Math.PI / 2, 0, 0]} scale={[12, 6, 1]} />
-        <Lightformer intensity={1.2} position={[-8, 2, 2]} rotation={[0, Math.PI / 2, 0]} scale={[6, 3, 1]} color="#dbe9ff" />
-        <Lightformer intensity={1.2} position={[8, 2, 2]} rotation={[0, -Math.PI / 2, 0]} scale={[6, 3, 1]} />
-      </Environment>
+    <Canvas shadows dpr={[1, 1.75]} camera={{ position: [0, 9.5, width * 0.5 + 12], fov: 40 }} gl={{ antialias: true, alpha: true, toneMapping: THREE.ACESFilmicToneMapping }} style={{ background: "radial-gradient(ellipse at 50% 30%, #2a3140 0%, #171b23 70%)" }}>
+      <ambientLight intensity={0.22} />
+      <directionalLight position={[8, 14, 6]} intensity={0.9} color="#fff3e0" castShadow shadow-mapSize={[2048, 2048]} shadow-bias={-0.0003} shadow-camera-left={-24} shadow-camera-right={24} shadow-camera-top={24} shadow-camera-bottom={-24} />
+      {/* real foundry HDRI (Poly Haven, CC0): lighting, reflections and the backdrop */}
+      <Suspense fallback={null}>
+        <Environment files="/hdri/industrial_workshop_foundry_1k.hdr" environmentIntensity={0.7} />
+      </Suspense>
       <Suspense fallback={null}><Scene machines={machines} labels={labels} /></Suspense>
-      <ContactShadows position={[0, 0.005, 0]} opacity={0.4} scale={40} blur={2.2} far={5} color="#0b1a33" />
-      <OrbitControls makeDefault target={[0, 0.8, 0]} maxPolarAngle={Math.PI / 2.1} minDistance={6} maxDistance={80} />
+      <ContactShadows position={[0, 0.005, 0]} opacity={0.55} scale={48} blur={2} far={6} color="#000000" />
+      <OrbitControls makeDefault target={[0, 1.2, 0]} maxPolarAngle={Math.PI / 2.2} minDistance={6} maxDistance={80} />
     </Canvas>
     {/* DOM labels positioned by LabelProjector */}
     <div className="pointer-events-none absolute inset-0 overflow-hidden">

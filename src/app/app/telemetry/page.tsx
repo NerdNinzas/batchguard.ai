@@ -16,7 +16,7 @@ export default function TelemetryPage() {
   const [series, setSeries] = useState<{ t: number; v: number }[]>([]);
 
   useEffect(() => {
-    get<Machine[]>("/api/machines").then((ms) => { setMachines(ms); if (ms[0]) setSel({ m: ms[0].id, p: ms[0].parameters[0]?.name ?? "" }); });
+    get<Machine[]>("/api/machines").then((ms) => { setMachines(ms); if (ms[0]) setSel({ m: ms[0].id, p: ms[0].parameters[0]?.name ?? "" }); }).catch(() => setMachines([]));
     get<Row[]>("/api/telemetry/recent?limit=150").then(setRows);
   }, []);
   useEffect(() => {

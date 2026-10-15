@@ -1,0 +1,65 @@
+{
+  "license": "CC0 (Poly Haven)",
+  "models": [
+    {
+      "id": "industrial_storage_cart",
+      "file": "/models/ph/industrial_storage_cart/industrial_storage_cart_1k.gltf",
+      "kb": 2575
+    },
+    {
+      "id": "metal_tool_chest",
+      "file": "/models/ph/metal_tool_chest/metal_tool_chest_1k.gltf",
+      "kb": 2304
+    },
+    {
+      "id": "barrel_03",
+      "file": "/models/ph/barrel_03/barrel_03_1k.gltf",
+      "kb": 560
+    },
+    {
+      "id": "cardboard_box_01",
+      "file": "/models/ph/cardboard_box_01/cardboard_box_01_1k.gltf",
+      "kb": 2117
+    },
+    {
+      "id": "hand_truck",
+      "file": "/models/ph/hand_truck/hand_truck_1k.gltf",
+      "kb": 3104
+    },
+    {
+      "id": "caged_hanging_light",
+      "file": "/models/ph/caged_hanging_light/caged_hanging_light_1k.gltf",
+      "kb": 2994
+    },
+    {
+      "id": "industrial_pastic_container",
+      "file": "/models/ph/industrial_pastic_container/industrial_pastic_container_1k.gltf",
+      "kb": 1531
+    },
+    {
+      "id": "korean_fire_extinguisher_01",
+      "file": "/models/ph/korean_fire_extinguisher_01/korean_fire_extinguisher_01_1k.gltf",
+      "kb": 1580
+    },
+    {
+      "id": "WetFloorSign_01",
+      "file": "/models/ph/WetFloorSign_01/WetFloorSign_01_1k.gltf",
+      "kb": 260
+    },
+    {
+      "id": "drill_press_01",
+      "file": "/models/ph/drill_press_01/drill_press_01_1k.gltf",
+      "kb": 3939
+    },
+    {
+      "id": "metal_trash_can",
+      "file": "/models/ph/metal_trash_can/metal_trash_can_1k.gltf",
+      "kb": 4877
+    },
+    {
+      "id": "ladder_sectioned_01",
+      "file": "/models/ph/ladder_sectioned_01/ladder_sectioned_01_1k.gltf",
+      "kb": 2511
+    }
+  ]
+}

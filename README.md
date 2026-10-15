@@ -124,6 +124,12 @@ backend/                     # FastAPI + ADK (see backend/README.md)
 - `public/models/factory/` — [Kenney Factory Kit 3.0](https://kenney.nl/assets/factory-kit), CC0. Conveyors, hopper, scanner,
   robot arm, machines, structures, pipes, crane, cones. Loaded with `useGLTF` + drei `Clone` in `FactoryScene.tsx`.
 - `public/logos/` — brand marks from [Simple Icons](https://simpleicons.org) (CC0), rendered by `src/components/ui/TechLogo.tsx`.
+- `public/machines/` — real machine photos from Wikimedia Commons (CC0 / CC BY / CC BY-SA; per-file attribution in
+  `credits.json`, shown in the "Learn more" sheet), used by the onboarding type picker (`src/lib/machineTypes.ts`).
+- `public/hdri/`, `public/textures/floor/`, `public/models/ph/` — [Poly Haven](https://polyhaven.com) CC0 HDRIs
+  (`industrial_workshop_foundry`, `machine_shop_01`), the `concrete_floor_02` PBR set, and photoscanned props
+  (storage cart, tool chest, barrels, boxes, hand truck, caged lights, fire extinguisher, wet-floor sign, drill press,
+  ladder, trash can) used in the dashboard 3D factory.
 
 ## Blender models
 

@@ -15,7 +15,7 @@ export default function FactoryPage() {
   const [latest, setLatest] = useState<Record<string, Latest>>({});
 
   useEffect(() => {
-    get<Machine[]>("/api/machines").then((ms) => { setMachines(ms); setLatest(Object.fromEntries(ms.map((m) => [m.id, m.latest]))); });
+    get<Machine[]>("/api/machines").then((ms) => { setMachines(ms); setLatest(Object.fromEntries(ms.map((m) => [m.id, m.latest]))); }).catch(() => setMachines([]));
   }, []);
   useEffect(
     () =>

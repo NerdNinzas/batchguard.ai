@@ -1,0 +1,44 @@
+{
+  "conveyor": {
+    "title": "Conveyor system in a factory.jpg",
+    "author": "falco",
+    "license": "CC0",
+    "source": "https://commons.wikimedia.org/wiki/File:Conveyor_system_in_a_factory.jpg"
+  },
+  "motor": {
+    "title": "Induction motor drill press.jpg",
+    "author": "Hardyplants",
+    "license": "CC0",
+    "source": "https://commons.wikimedia.org/wiki/File:Induction_motor_drill_press.jpg"
+  },
+  "pump": {
+    "title": "Centrifugal Pump.jpg",
+    "author": "Saud",
+    "license": "CC BY-SA 4.0",
+    "source": "https://commons.wikimedia.org/wiki/File:Centrifugal_Pump.jpg"
+  },
+  "compressor": {
+    "title": "Elang Compressors Display.jpg",
+    "author": "Elanggroup",
+    "license": "CC BY-SA 4.0",
+    "source": "https://commons.wikimedia.org/wiki/File:Elang_Compressors_Display.jpg"
+  },
+  "hopper": {
+    "title": "Bowl Feeder.jpg",
+    "author": "Richdsu",
+    "license": "Public domain",
+    "source": "https://commons.wikimedia.org/wiki/File:Bowl_Feeder.jpg"
+  },
+  "sealer": {
+    "title": "Continuous Band Sealer Machine.jpg",
+    "author": "M5s",
+    "license": "CC BY-SA 4.0",
+    "source": "https://commons.wikimedia.org/wiki/File:Continuous_Band_Sealer_Machine.jpg"
+  },
+  "inspection": {
+    "title": "AP Dataweigh 3 bed checkweigher with touchscreen reject and accumulation station.jpg",
+    "author": "Svanduzen at English Wikipedia",
+    "license": "CC BY-SA 3.0",
+    "source": "https://commons.wikimedia.org/wiki/File:AP_Dataweigh_3_bed_checkweigher_with_touchscreen_reject_and_accumulation_station.jpg"
+  }
+}

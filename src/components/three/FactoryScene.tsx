@@ -1,7 +1,7 @@
 "use client";
 
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { Clone, ContactShadows, Environment, Html, Lightformer, RoundedBox, Sparkles, useGLTF } from "@react-three/drei";
+import { Clone, ContactShadows, Environment, Html, RoundedBox, Sparkles, useGLTF } from "@react-three/drei";
 import { Suspense, useMemo, useRef } from "react";
 import * as THREE from "three";
 import type { Stage } from "./story";
@@ -469,12 +469,10 @@ export default function FactoryScene({ stage, interactive = true }: { stage: Sta
         shadow-camera-bottom={-12}
       />
       <directionalLight position={[-6, 4, -6]} intensity={0.5} color="#cfe3ff" />
-      <Environment resolution={256}>
-        <Lightformer intensity={2.5} position={[0, 6, 0]} rotation={[Math.PI / 2, 0, 0]} scale={[12, 6, 1]} color="#ffffff" />
-        <Lightformer intensity={1.2} position={[-8, 2, 2]} rotation={[0, Math.PI / 2, 0]} scale={[6, 3, 1]} color="#dbe9ff" />
-        <Lightformer intensity={1.2} position={[8, 2, 2]} rotation={[0, -Math.PI / 2, 0]} scale={[6, 3, 1]} color="#ffffff" />
-        <Lightformer intensity={0.6} position={[0, 1, -8]} scale={[10, 3, 1]} color="#cfdcf0" />
-      </Environment>
+      {/* real machine-shop HDRI (Poly Haven, CC0): lighting + reflections; backdrop stays the page's white/blue */}
+      <Suspense fallback={null}>
+        <Environment files="/hdri/machine_shop_01_1k.hdr" environmentIntensity={0.75} />
+      </Suspense>
       <CameraRig stage={stage} interactive={interactive} />
       <Suspense fallback={null}>
         <Surroundings />

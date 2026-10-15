@@ -5,6 +5,7 @@ import { CheckCircle2, FileUp, Keyboard, Plus, Sparkles, Trash2 } from "lucide-r
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { KeyReveal } from "@/components/app/KeyReveal";
+import { MachineTypePicker } from "@/components/app/MachineTypePicker";
 import { Badge, Button, Card, Input, Modal, Select } from "@/components/ui/Primitives";
 import { useToast } from "@/components/ui/Toast";
 import { api, get, post, type Knowledge, type Machine, type Parameter } from "@/lib/api";
@@ -102,12 +103,10 @@ export default function OnboardPage() {
             <Sparkles size={28} className="text-blue" />
             <p className="mt-3 font-semibold text-ink">{busy ? "Reading the manual…" : "Drop a PDF or image here, or click to choose"}</p>
             <p className="mt-1 text-xs text-muted">Gemini extracts parameters, units, normal ranges, warning/critical limits and the troubleshooting sections — with the page each value came from.</p>
-            <div className="mt-4 flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-              <span className="text-xs text-muted">Hint type</span>
-              <select value={type} onChange={(e) => setType(e.target.value)} className="rounded-lg border border-line bg-white px-2 py-1 text-xs">
-                {(types?.types ?? ["conveyor"]).map((t) => <option key={t}>{t}</option>)}
-              </select>
-            </div>
+          </div>
+          <div className="mt-4">
+            <p className="mb-2 text-xs text-muted">Tell Muse what kind of machine the manual describes (helps extraction):</p>
+            <MachineTypePicker value={type} onChange={setType} compact />
           </div>
           {extract && (
             <div className={`mt-3 rounded-xl border p-3 text-xs ${extract.source === "gemini" ? "border-green/40 bg-green/5 text-ink" : "border-amber/40 bg-amber/5 text-ink"}`}>
@@ -119,13 +118,9 @@ export default function OnboardPage() {
       )}
 
       {tab === "manual" && (
-        <Card title="1 · Start from a template (optional)">
-          <div className="flex flex-wrap gap-2">
-            {(types?.types ?? []).filter((t) => types?.templates[t]).map((t) => (
-              <Button key={t} size="sm" variant={type === t ? "primary" : "secondary"} onClick={() => applyTemplate(t)}>{t}</Button>
-            ))}
-          </div>
-          <p className="mt-2 text-xs text-muted">Templates are typical values for the machine type, marked as defaults. Replace them with the values from your machine&apos;s documentation.</p>
+        <Card title="1 · What kind of machine is it?">
+          <MachineTypePicker value={type} onChange={applyTemplate} />
+          <p className="mt-3 text-xs text-muted">Picking a type loads typical limits as a starting point, marked as defaults. Replace them with the values from your machine&apos;s documentation and tick each one.</p>
         </Card>
       )}
 

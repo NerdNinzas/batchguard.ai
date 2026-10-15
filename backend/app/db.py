@@ -99,24 +99,29 @@ def _connect() -> sqlite3.Connection:
     return conn
 
 
-_conn: sqlite3.Connection | None = None
+_local = threading.local()
 
 
 def init_db() -> None:
-    global _conn
-    _conn = _connect()
-    _conn.executescript(SCHEMA)
-    _conn.commit()
+    c = conn()
+    c.executescript(SCHEMA)
+    c.commit()
 
 
 def conn() -> sqlite3.Connection:
-    assert _conn is not None, "init_db() not called"
-    return _conn
+    """One connection per thread: sqlite3 connections are not safe to share across threads
+    (request workers, the demo producer, the sweeper and agent threads all read concurrently).
+    WAL mode lets readers proceed while one writer holds `_lock`."""
+    c = getattr(_local, "conn", None)
+    if c is None:
+        c = _connect()
+        _local.conn = c
+    return c
 
 
 @contextmanager
 def tx() -> Iterator[sqlite3.Connection]:
-    """Serialised write transaction (sqlite + threads)."""
+    """Serialised write transaction."""
     with _lock:
         c = conn()
         try:
