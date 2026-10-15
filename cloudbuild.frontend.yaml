@@ -6,6 +6,8 @@ steps:
       - -t
       - ${_IMAGE}
       - --build-arg
+      - BACKEND_URL=${_BACKEND_URL}
+      - --build-arg
       - NEXT_PUBLIC_APP_URL=${_APP_URL}
       - --build-arg
       - NEXT_PUBLIC_FIREBASE_API_KEY=${_FIREBASE_API_KEY}
@@ -21,6 +23,7 @@ images:
 substitutions:
   _IMAGE: ""
   _APP_URL: ""
+  _BACKEND_URL: "http://localhost:8000"
   _FIREBASE_API_KEY: ""
   _FIREBASE_AUTH_DOMAIN: ""
   _FIREBASE_PROJECT_ID: ""

@@ -32,7 +32,7 @@ deploy_frontend() {
   echo "▶ building frontend image (BACKEND_URL=$BACKEND_URL)"
   # the public URL is only known after the first deploy; pass it in on re-deploys for correct code samples
   APP_URL="${APP_URL:-$(gcloud run services describe batchguard-frontend --region "$REGION" --format 'value(status.url)' 2>/dev/null || echo https://batchguard.run.app)}"
-  gcloud builds submit . --config cloudbuild.frontend.yaml --substitutions "_IMAGE=$REPO/frontend:latest,_APP_URL=$APP_URL" --quiet
+  gcloud builds submit . --config cloudbuild.frontend.yaml --substitutions "_IMAGE=$REPO/frontend:latest,_APP_URL=$APP_URL,_BACKEND_URL=$BACKEND_URL" --quiet
   echo "▶ deploying frontend (scale-to-zero)"
   gcloud run deploy batchguard-frontend --image "$REPO/frontend:latest" --region "$REGION" \
     --allow-unauthenticated --cpu 1 --memory 512Mi --min-instances 0 --max-instances 3 --port 8080 \
