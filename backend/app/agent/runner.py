@@ -28,6 +28,14 @@ def _allowed_numbers(machine_id: str) -> set[float]:
         if sec.get("page") is not None:
             allowed.add(float(sec["page"]))
     allowed.update({60.0, 120.0, 300.0, 600.0, 900.0, 1800.0, 3600.0})
+    # neighbours on the same line: the agent may cite their latest values and limits (cross-machine reasoning)
+    mrow = conn().execute("SELECT org_id, line_id FROM machines WHERE id=?", (machine_id,)).fetchone()
+    if mrow:
+        for n in conn().execute("SELECT id FROM machines WHERE org_id=? AND COALESCE(line_id,'')=COALESCE(?,'') AND id!=?", (mrow["org_id"], mrow["line_id"], machine_id)).fetchall():
+            for r in conn().execute("SELECT value FROM latest WHERE machine_id=?", (n["id"],)).fetchall():
+                allowed.update({round(float(r["value"]), 3), round(float(r["value"]), 1), float(round(r["value"]))})
+            for p in conn().execute("SELECT warn_low, warn_high, crit_low, crit_high FROM parameters WHERE machine_id=?", (n["id"],)).fetchall():
+                allowed.update(float(v) for v in p if v is not None)
     return allowed
 
 
