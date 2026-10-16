@@ -86,6 +86,18 @@ CREATE TABLE IF NOT EXISTS agent_runs (
 CREATE TABLE IF NOT EXISTS chat (
   id TEXT PRIMARY KEY, incident_id TEXT NOT NULL, role TEXT NOT NULL, text TEXT NOT NULL, ts REAL NOT NULL
 );
+CREATE TABLE IF NOT EXISTS voice_settings (
+  org_id TEXT PRIMARY KEY, telephony_configuration_id INTEGER, from_phone_number_id INTEGER, from_number TEXT,
+  auto_dial INTEGER NOT NULL DEFAULT 0, workflows TEXT NOT NULL DEFAULT '{}', updated_at REAL NOT NULL
+);
+CREATE TABLE IF NOT EXISTS voice_calls (
+  id TEXT PRIMARY KEY, org_id TEXT NOT NULL, incident_id TEXT, contact_id TEXT, contact_name TEXT, call_type TEXT NOT NULL,
+  to_number TEXT NOT NULL, from_number TEXT, workflow_id INTEGER, workflow_uuid TEXT, run_id INTEGER, run_name TEXT,
+  status TEXT NOT NULL, duration_seconds REAL, disposition TEXT, initial_context TEXT, gathered_context TEXT,
+  transcript_url TEXT, recording_url TEXT, error TEXT, placed_by TEXT, applied INTEGER NOT NULL DEFAULT 0,
+  created_at REAL NOT NULL, updated_at REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_voice_calls_org ON voice_calls(org_id, created_at);
 """
 
 

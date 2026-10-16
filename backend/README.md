@@ -20,7 +20,8 @@ app/
   auth.py            scrypt passwords, JWT session cookie, device-key hashing, Firebase ID-token verify
   detection.py       limits · trend (linear fit → time-to-limit) · anomaly (z-score) · health score
   incidents.py       open/attach with cooldown & grouping, severity ladder, ack/resolve, escalation + staleness sweeps
-  notify.py          in-app + email (SMTP or simulated); voice is planned (TeleCMI + Gemini Live)
+  notify.py          in-app + email (SMTP or simulated) + voice (Dograh → Gemini Live realtime → TeleCMI; auto-dial per org)
+  voice/             dograh.py client · calls.py (call types, context from the report, outcomes → incident) · workflows/*.json (5 Dograh call flows)
   bus.py             in-process pub/sub → SSE (/api/stream)
   cloud.py           Firestore mirror · Pub/Sub→BigQuery · BigQuery history · Cloud Storage · Cloud Logging (all fail-soft)
   demo.py            seeded demo factory + built-in telemetry producer (DEMO_MODE)

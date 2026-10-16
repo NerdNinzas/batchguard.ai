@@ -64,10 +64,33 @@ export type Incident = {
   chat?: { id: string; role: string; text: string; ts: number }[];
   notifications?: Notification[];
 };
+/* ---------- voice AI (Dograh · Gemini Live realtime · TeleCMI) ---------- */
+export type VoiceNumber = { id: number; config_id: number; config_name: string; provider: string; number: string; label: string | null; country: string | null; active: boolean; default_caller: boolean; telecmi: boolean };
+export type VoiceWorkflowRef = { id: number; uuid: string | null; name: string; synced_at: number; version: number };
+export type VoiceSettings = { org_id: string; telephony_configuration_id: number | null; from_phone_number_id: number | null; from_number: string | null; auto_dial: number; workflows: Record<string, VoiceWorkflowRef>; updated_at: number };
+export type VoiceStatus = {
+  enabled: boolean; host: string | null; realtime_model: string; settings: VoiceSettings;
+  telephony: { configs: { id: number; name: string; provider: string; connectivity: string; is_default_outbound: boolean; is_ready_for_outbound: boolean; phone_number_count: number; outbound_blocked_reason: string | null }[]; numbers: VoiceNumber[]; error: string | null };
+  call_types: { key: string; title: string; synced: VoiceWorkflowRef | null }[];
+  contacts: { id: string; name: string; role: string; phone: string; escalation_order: number }[];
+};
+export type WfNode = { id: string; type: string; position: { x: number; y: number }; data: Record<string, unknown> };
+export type WfEdge = { id: string; source: string; target: string; data?: { label?: string; condition?: string } };
+export type CallType = {
+  key: string; title: string; icon: string; tone: string; description: string; trigger: string; severity: string[];
+  variables: { name: string; description: string; example: string }[]; template_variables: { name: string; default: string }[];
+  workflow_definition: { nodes: WfNode[]; edges: WfEdge[] }; synced: VoiceWorkflowRef | null;
+};
+export type VoiceCall = {
+  id: string; incident_id: string | null; contact_id: string | null; contact_name: string | null; call_type: string; title: string; to_number: string; from_number: string | null;
+  workflow_id: number | null; workflow_uuid: string | null; run_id: number | null; run_name: string | null; status: string; duration_seconds: number | null; disposition: string | null;
+  initial_context: Record<string, string>; gathered_context: Record<string, unknown> | null; transcript_url: string | null; recording_url: string | null; error: string | null;
+  placed_by: string; created_at: number; updated_at: number; transcript?: string; incident?: { id: string; title: string; severity: string; status: string } | null;
+};
 export type Notification = { id: string; incident_id?: string | null; channel: string; contact_id?: string | null; to_addr?: string | null; subject: string; body: string; status: string; sent_at: number; read: number };
 
 /* ---------- live stream ---------- */
-export type LiveEvent = { type: "telemetry" | "incident" | "machine" | "event" | "notification"; data: Record<string, unknown> & { [k: string]: unknown } };
+export type LiveEvent = { type: "telemetry" | "incident" | "machine" | "event" | "notification" | "voice_call"; data: Record<string, unknown> & { [k: string]: unknown } };
 
 /** Subscribe to the org's SSE stream. `onEvent` is called for every message; returns connection state. */
 export function useLive(onEvent: (e: LiveEvent) => void, enabled = true) {

@@ -1,4 +1,4 @@
-"""Escalation channels: in-app (always), email (SMTP or simulated). Voice is planned (TeleCMI + Gemini Live)."""
+"""Escalation channels: in-app (always), email (SMTP or simulated), voice (Dograh → Gemini Live realtime → TeleCMI)."""
 
 import smtplib
 from email.message import EmailMessage
@@ -82,7 +82,7 @@ def on_incident_opened(inc: dict[str, Any], m: dict[str, Any]) -> None:
     if sev in ("critical", "emergency"):
         contacts = _contacts(org_id)
         primary = contacts[0] if contacts else None
-        _record(org_id, inc["id"], "voice", primary, subject, "Voice call planned (TeleCMI + Gemini Live) — not wired yet", "planned")
+        _voice(org_id, inc, m, primary, level=0)
 
 
 def on_incident_escalated(inc: dict[str, Any], m: dict[str, Any], level: int = 0) -> None:
@@ -94,7 +94,26 @@ def on_incident_escalated(inc: dict[str, Any], m: dict[str, Any], level: int = 0
     if target and target.get("email"):
         _record(org_id, inc["id"], "email", target, subject, body, send_email(target["email"], subject, body))
     if inc["severity"] in ("critical", "emergency"):
-        _record(org_id, inc["id"], "voice", target, subject, f"Voice escalation level {level} planned — not wired yet", "planned")
+        _voice(org_id, inc, m, target, level=level)
+
+
+def _voice(org_id: str, inc: dict[str, Any], m: dict[str, Any], contact: dict[str, Any] | None, level: int) -> None:
+    """Critical/emergency → Muse calls the contact over TeleCMI (Gemini Live) when the org switched auto-dial on;
+    otherwise the call is one click away on the incident page (recorded as 'ready')."""
+    from .voice import calls, dograh
+
+    subject, _ = _incident_text(inc, m)
+    if not dograh.enabled():
+        _record(org_id, inc["id"], "voice", contact, subject, "Voice AI not configured (DOGRAH_API_KEY)", "skipped")
+        return
+    if not contact or not contact.get("phone"):
+        _record(org_id, inc["id"], "voice", contact, subject, "No phone number on the contact", "skipped")
+        return
+    queued = calls.auto_dial(inc, m, contact, level=level)
+    if queued:
+        _record(org_id, inc["id"], "voice", contact, subject, f"Muse is calling {contact['name']} ({queued['call_type']}) via TeleCMI · Gemini Live", "dialing")
+    else:
+        _record(org_id, inc["id"], "voice", contact, subject, f"Auto-dial off — call {contact['name']} from the incident page (Gemini Live via TeleCMI)", "ready")
 
 
 def daily_digest_text(org_id: str) -> str:

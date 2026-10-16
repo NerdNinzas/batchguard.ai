@@ -50,3 +50,6 @@ backend/**/__pycache__/
 # GCP service-account keys — never commit
 backend/secrets/
 *.sa.json
+
+# Reference Vite app studied for the Dograh integration (nested repo; integrated under backend/app/voice + src/app/app/voice)
+/ecoforge-voice-dograh/

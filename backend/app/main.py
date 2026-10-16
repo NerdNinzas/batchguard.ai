@@ -11,16 +11,21 @@ from fastapi.responses import JSONResponse
 from . import bus, cloud, demo, incidents
 from .config import settings
 from .db import conn, init_db, tx
-from .routers import auth, device, incidents as incidents_router, machines, misc, orgs
+from .routers import auth, device, incidents as incidents_router, machines, misc, orgs, voice
+from .voice import calls as voice_calls
 
 
 async def _sweeper() -> None:
+    tick = 0
     while True:
         try:
             await asyncio.to_thread(incidents.staleness_sweep)
             await asyncio.to_thread(incidents.escalation_sweep)
+            if tick % 3 == 0:  # every 15 s: pull outcomes of voice calls still in flight
+                await asyncio.to_thread(voice_calls.poll_pending)
         except Exception as e:  # noqa: BLE001
             print("sweeper error:", e)
+        tick += 1
         await asyncio.sleep(5)
 
 
@@ -36,7 +41,7 @@ async def lifespan(app: FastAPI):
     if settings.demo_mode:
         await asyncio.to_thread(demo.ensure_seeded)
         demo.start_producer()
-    print(f"BatchGuard backend ready · gemini={('vertex:' + settings.google_cloud_location) if settings.google_genai_use_vertexai and settings.gemini_enabled else 'on' if settings.gemini_enabled else 'off (fallback)'} · gcp={settings.gcp_project or 'off'} · smtp={'on' if settings.smtp_enabled else 'simulated'} · db={settings.db_file}")
+    print(f"BatchGuard backend ready · gemini={('vertex:' + settings.google_cloud_location) if settings.google_genai_use_vertexai and settings.gemini_enabled else 'on' if settings.gemini_enabled else 'off (fallback)'} · gcp={settings.gcp_project or 'off'} · smtp={'on' if settings.smtp_enabled else 'simulated'} · voice={'dograh' if settings.voice_enabled else 'off'} · db={settings.db_file}")
     yield
     task.cancel()
 
@@ -63,10 +68,10 @@ async def api_log(request: Request, call_next):
     return response
 
 
-for r in (auth.router, orgs.router, machines.router, device.router, incidents_router.router, misc.router):
+for r in (auth.router, orgs.router, machines.router, device.router, incidents_router.router, misc.router, voice.router):
     app.include_router(r)
 
 
 @app.get("/api/health")
 def health() -> dict:
-    return {"ok": True, "gemini": settings.gemini_enabled, "smtp": settings.smtp_enabled, "demo": settings.demo_mode, "vertex": settings.google_genai_use_vertexai, "cloud": cloud.status(), "machines": conn().execute("SELECT COUNT(*) n FROM machines").fetchone()["n"]}
+    return {"ok": True, "gemini": settings.gemini_enabled, "smtp": settings.smtp_enabled, "demo": settings.demo_mode, "vertex": settings.google_genai_use_vertexai, "voice": settings.voice_enabled, "cloud": cloud.status(), "machines": conn().execute("SELECT COUNT(*) n FROM machines").fetchone()["n"]}

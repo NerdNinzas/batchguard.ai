@@ -30,7 +30,7 @@ npm run device -- --device <device_id> --key <api_key> --type conveyor --fault b
 
 Without any Google Cloud credentials everything still works: Gemini falls back to a rule-based investigator and template
 extraction, Google sign-in is replaced by email/password, and emails are recorded as "simulated". Add keys to the two
-`.env` files to switch each integration on. Voice escalation (TeleCMI + Gemini Live) is planned and not wired.
+`.env` files to switch each integration on. Voice escalation is live: set `DOGRAH_API_KEY` (self-hosted Dograh, Gemini Live realtime voice) and pick a TeleCMI number on **/app/voice**; each call type is a JSON workflow in `backend/app/voice/workflows`.
 
 ## Live
 

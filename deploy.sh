@@ -9,6 +9,11 @@ REGION="${GCP_REGION:-asia-southeast1}"
 REPO="$REGION-docker.pkg.dev/$PROJECT/batchguard"
 SA="batchguard-backend@$PROJECT.iam.gserviceaccount.com"
 WHAT="${1:-all}"
+# Voice AI (Dograh → TeleCMI). The API key lives in Secret Manager: 
+#   printf '%s' "$DOGRAH_API_KEY" | gcloud secrets create batchguard-dograh-key --data-file=-
+DOGRAH_BASE_URL="${DOGRAH_BASE_URL:-https://139-59-65-115.sslip.io/api/v1}"
+DOGRAH_TELEPHONY_CONFIG_ID="${DOGRAH_TELEPHONY_CONFIG_ID:-2}"
+DOGRAH_FROM_PHONE_NUMBER_ID="${DOGRAH_FROM_PHONE_NUMBER_ID:-3}"
 
 echo "▶ project=$PROJECT region=$REGION"
 gcloud config set project "$PROJECT" >/dev/null
@@ -20,8 +25,8 @@ deploy_backend() {
   gcloud run deploy batchguard-backend --image "$REPO/backend:latest" --region "$REGION" \
     --service-account "$SA" --allow-unauthenticated --cpu 1 --memory 1Gi --min-instances 1 --max-instances 1 \
     --cpu-boost --no-cpu-throttling --timeout 3600 --concurrency 80 --port 8080 \
-    --set-secrets "AUTH_SECRET=batchguard-auth-secret:latest" \
-    --set-env-vars "GOOGLE_GENAI_USE_VERTEXAI=true,GOOGLE_CLOUD_PROJECT=$PROJECT,GOOGLE_CLOUD_LOCATION=global,GCP_PROJECT=$PROJECT,GCP_LOCATION=$REGION,GCS_BUCKET=$PROJECT-manuals,BIGQUERY_DATASET=batchguard,PUBSUB_TOPIC_TELEMETRY=telemetry,CLOUD_LOGGING=true,DEMO_MODE=true,FIREBASE_PROJECT_ID=$PROJECT" \
+    --set-secrets "AUTH_SECRET=batchguard-auth-secret:latest,DOGRAH_API_KEY=batchguard-dograh-key:latest" \
+    --set-env-vars "GOOGLE_GENAI_USE_VERTEXAI=true,GOOGLE_CLOUD_PROJECT=$PROJECT,GOOGLE_CLOUD_LOCATION=global,GCP_PROJECT=$PROJECT,GCP_LOCATION=$REGION,GCS_BUCKET=$PROJECT-manuals,BIGQUERY_DATASET=batchguard,PUBSUB_TOPIC_TELEMETRY=telemetry,CLOUD_LOGGING=true,DEMO_MODE=true,FIREBASE_PROJECT_ID=$PROJECT,DOGRAH_BASE_URL=$DOGRAH_BASE_URL,DOGRAH_TELEPHONY_CONFIG_ID=$DOGRAH_TELEPHONY_CONFIG_ID,DOGRAH_FROM_PHONE_NUMBER_ID=$DOGRAH_FROM_PHONE_NUMBER_ID,VOICE_AUTO_DIAL=false" \
     --quiet
   BACKEND_URL=$(gcloud run services describe batchguard-backend --region "$REGION" --format 'value(status.url)')
   echo "✓ backend: $BACKEND_URL"

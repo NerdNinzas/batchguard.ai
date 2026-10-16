@@ -1,0 +1,299 @@
+{
+  "key": "warning_notice",
+  "title": "Warning advisory · plan an inspection",
+  "icon": "triangle",
+  "tone": "amber",
+  "description": "A trend or limit warning that is not yet critical: a short, low-pressure notice that ends with an agreed inspection window.",
+  "trigger": "Manual only (warnings go to email by default). Useful for night shifts where email is not watched.",
+  "severity": [
+    "warning"
+  ],
+  "variables": [
+    {
+      "name": "org_name",
+      "description": "Organisation name",
+      "example": "Demo Packaging Co"
+    },
+    {
+      "name": "contact_name",
+      "description": "Person being called",
+      "example": "Maintenance lead"
+    },
+    {
+      "name": "contact_role",
+      "description": "Their role on the escalation ladder",
+      "example": "Maintenance"
+    },
+    {
+      "name": "dashboard_url",
+      "description": "Deep link to the incident on the dashboard",
+      "example": "https://batchguard.run.app/app/incidents/inc_x"
+    },
+    {
+      "name": "lang",
+      "description": "Spoken language",
+      "example": "English"
+    },
+    {
+      "name": "machine_name",
+      "description": "Machine display name",
+      "example": "Filler F-200"
+    },
+    {
+      "name": "device_id",
+      "description": "Device id the machine posts telemetry with",
+      "example": "filler-f-200-01a"
+    },
+    {
+      "name": "line_name",
+      "description": "Production line",
+      "example": "Line 1"
+    },
+    {
+      "name": "severity",
+      "description": "Incident severity",
+      "example": "critical"
+    },
+    {
+      "name": "problem",
+      "description": "One-sentence problem statement from Muse's report (or the triggering signal)",
+      "example": "Bearing temperature climbed past the critical limit while vibration rose with it."
+    },
+    {
+      "name": "likely_cause",
+      "description": "Top ranked cause from the report",
+      "example": "Bearing wear on the main drive"
+    },
+    {
+      "name": "first_check",
+      "description": "Most discriminating check, first in the list",
+      "example": "Feel the drive-end bearing housing for heat and listen for grinding; compare with the non-drive end."
+    },
+    {
+      "name": "incident_id",
+      "description": "Incident id",
+      "example": "inc_abc123"
+    },
+    {
+      "name": "opened_ago",
+      "description": "How long ago the incident opened, in words",
+      "example": "4 minutes ago"
+    }
+  ],
+  "workflow_definition": {
+    "nodes": [
+      {
+        "id": "global",
+        "type": "globalNode",
+        "position": {
+          "x": -520,
+          "y": -300
+        },
+        "data": {
+          "name": "Muse persona · advisory calls",
+          "prompt": "You are Muse, the BatchGuard AI voice agent for {{org_name | the factory}}, speaking to {{contact_name | the on-call contact}} ({{contact_role | on-call}}). Speak {{lang | English}} — calm, clear and short: the person may be on a loud factory floor. One question at a time. Plain words, no jargon the brief does not use.\n\nFACTS: say only what the brief gives you. Never invent readings, limits, numbers, part names or causes. If you are asked something the brief does not cover, say the full evidence is on the BatchGuard dashboard at {{dashboard_url | the BatchGuard dashboard}} and move on.\n\nSAFETY: you are advisory only. Every physical action is done by qualified personnel under the site's lockout/tagout and safety rules. Never suggest bypassing a guard, interlock or safety device. Never promise that BatchGuard will fix anything by itself.\n\nHANDLING: if it is a wrong number or the person cannot talk, apologise once and end politely. If the line is poor, repeat the key sentence slowly once. Do not repeat the whole brief more than twice. Do not argue; if they refuse, note it and close.",
+          "allow_interrupt": true,
+          "add_global_prompt": false,
+          "invalid": false
+        }
+      },
+      {
+        "id": "start",
+        "type": "startCall",
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "data": {
+          "name": "Identify the contact",
+          "prompt": "Wait. If confirmed, continue. If it is a bad time, offer to send the details by email and end. If someone else, ask whether they can take a short, non-urgent machine notice; else end.",
+          "is_start": true,
+          "greeting_type": "text",
+          "greeting": "Hello, this is Muse from BatchGuard AI for {{org_name | your factory}}. Nothing urgent — am I speaking with {{contact_name | the on-call contact}}?",
+          "allow_interrupt": true,
+          "wait_for_user_response": true,
+          "wait_for_user_response_timeout": 10,
+          "detect_voicemail": true,
+          "add_global_prompt": true,
+          "invalid": false,
+          "selected_through_edge": false,
+          "hovered_through_edge": false
+        }
+      },
+      {
+        "id": "brief",
+        "type": "agentNode",
+        "position": {
+          "x": 460,
+          "y": 0
+        },
+        "data": {
+          "name": "Advisory brief (≤ 20 s)",
+          "prompt": "Say, under 20 seconds: \"{{machine_name | The machine}} on {{line_name | the line}} is showing a warning. {{problem | A parameter is drifting towards its limit.}} It is not critical yet. Suggested check when convenient: {{first_check | see the dashboard}}.\" Then ask: \"Would you like to schedule an inspection this shift, next shift, or leave it under watch?\"",
+          "allow_interrupt": true,
+          "wait_for_user_response": true,
+          "wait_for_user_response_timeout": 12,
+          "add_global_prompt": true,
+          "tool_uuids": [],
+          "invalid": false,
+          "selected_through_edge": false,
+          "hovered_through_edge": false
+        }
+      },
+      {
+        "id": "plan",
+        "type": "agentNode",
+        "position": {
+          "x": 920,
+          "y": 0
+        },
+        "data": {
+          "name": "Agree a plan",
+          "prompt": "Capture their choice: this shift / next shift / watch only / something else with a time. If they ask what happens if it worsens, say BatchGuard will call immediately if it becomes critical. Answer questions only from the brief; everything else is on the dashboard.",
+          "allow_interrupt": true,
+          "wait_for_user_response": true,
+          "wait_for_user_response_timeout": 12,
+          "add_global_prompt": true,
+          "tool_uuids": [],
+          "invalid": false,
+          "selected_through_edge": false,
+          "hovered_through_edge": false
+        }
+      },
+      {
+        "id": "wrap",
+        "type": "agentNode",
+        "position": {
+          "x": 1380,
+          "y": 0
+        },
+        "data": {
+          "name": "Wrap-up",
+          "prompt": "Repeat the plan back in one sentence, mention the dashboard link holds the trend and the checklist, remind them to follow site safety procedures, and say goodbye.",
+          "allow_interrupt": true,
+          "wait_for_user_response": true,
+          "wait_for_user_response_timeout": 12,
+          "add_global_prompt": true,
+          "tool_uuids": [],
+          "invalid": false,
+          "selected_through_edge": false,
+          "hovered_through_edge": false
+        }
+      },
+      {
+        "id": "end",
+        "type": "endCall",
+        "position": {
+          "x": 1840,
+          "y": 0
+        },
+        "data": {
+          "name": "End call",
+          "prompt": "The wrap-up has been said. End the call with a short goodbye.",
+          "is_end": true,
+          "allow_interrupt": false,
+          "add_global_prompt": true,
+          "extraction_enabled": true,
+          "extraction_prompt": "Report only what the transcript supports.",
+          "extraction_variables": [
+            {
+              "name": "reached_contact",
+              "type": "boolean",
+              "prompt": "Did the intended contact (or a substitute who agreed) speak with the agent?"
+            },
+            {
+              "name": "acknowledged",
+              "type": "boolean",
+              "prompt": "Did the person acknowledge the warning?"
+            },
+            {
+              "name": "inspection_when",
+              "type": "string",
+              "prompt": "Chosen plan: this_shift, next_shift, watch, or a free-text time."
+            },
+            {
+              "name": "voicemail",
+              "type": "boolean",
+              "prompt": "Voicemail or no answer?"
+            },
+            {
+              "name": "notes",
+              "type": "string",
+              "prompt": "One useful sentence for the maintenance log."
+            }
+          ],
+          "invalid": false
+        }
+      },
+      {
+        "id": "qa",
+        "type": "qa",
+        "position": {
+          "x": 1840,
+          "y": 420
+        },
+        "data": {
+          "name": "QC · advisory call",
+          "qa_enabled": true,
+          "qa_system_prompt": "Score this BatchGuard voice escalation call. Evidence is the transcript only. Return JSON with integer scores 1-5 and short reasons.\n\n1. brief_accuracy: did the agent say ONLY what the brief provided (machine, problem, first check, cause)? Any invented number or cause = 1.\n2. brevity: was the incident brief delivered in roughly 20 seconds of speech, one question at a time?\n3. safety: did the agent stay advisory, never instruct bypassing safety devices, and defer physical actions to qualified staff?\n4. outcome_capture: did the agent clearly obtain the acknowledgement / answer the call type needed, and confirm it back?\n5. tone: calm, respectful, no pressure, closed politely.\nAlso return: overall (1-5), issues (list of strings), should_review (boolean).",
+          "qa_use_workflow_llm": true,
+          "qa_min_call_duration": 10,
+          "qa_voicemail_calls": false,
+          "qa_sample_rate": 100
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "e01",
+        "source": "start",
+        "target": "brief",
+        "data": {
+          "label": "FORWARD · contact confirmed",
+          "condition": "Take once the person confirms and can talk."
+        }
+      },
+      {
+        "id": "e02",
+        "source": "start",
+        "target": "end",
+        "data": {
+          "label": "EXIT · bad time / wrong number / voicemail",
+          "condition": "Take if the person cannot talk, wrong number, no answer or voicemail."
+        }
+      },
+      {
+        "id": "e03",
+        "source": "brief",
+        "target": "plan",
+        "data": {
+          "label": "FORWARD · brief delivered",
+          "condition": "Take once the brief was delivered and the person responded."
+        }
+      },
+      {
+        "id": "e04",
+        "source": "plan",
+        "target": "wrap",
+        "data": {
+          "label": "FORWARD · plan chosen",
+          "condition": "Take once a plan (this shift / next shift / watch / a time) is chosen or the person declines to choose."
+        }
+      },
+      {
+        "id": "e05",
+        "source": "wrap",
+        "target": "end",
+        "data": {
+          "label": "END · wrap-up said",
+          "condition": "Take immediately after the wrap-up."
+        }
+      }
+    ],
+    "viewport": {
+      "x": 40,
+      "y": 120,
+      "zoom": 0.55
+    }
+  }
+}

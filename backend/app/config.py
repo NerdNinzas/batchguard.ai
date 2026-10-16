@@ -38,6 +38,13 @@ class Settings(BaseSettings):
     smtp_pass: str = ""
     smtp_from: str = "BatchGuard AI <alerts@example.com>"
 
+    # Voice escalation: self-hosted Dograh (Gemini Live realtime voice) dialling out through a TeleCMI SIP trunk
+    dograh_base_url: str = "https://139-59-65-115.sslip.io/api/v1"
+    dograh_api_key: str = ""
+    dograh_telephony_config_id: int | None = None   # TeleCMI configuration id on Dograh (None → Dograh's default outbound)
+    dograh_from_phone_number_id: int | None = None  # TeleCMI number id used as caller id (None → config default)
+    voice_auto_dial: bool = False                   # auto-call contacts on critical/emergency (per-org switch overrides)
+
     stale_after_seconds: int = 10
     incident_cooldown_seconds: int = 300
     escalation_timeout_seconds: int = 120
@@ -59,6 +66,10 @@ class Settings(BaseSettings):
     @property
     def smtp_enabled(self) -> bool:
         return bool(self.smtp_host and self.smtp_user)
+
+    @property
+    def voice_enabled(self) -> bool:
+        return bool(self.dograh_api_key and self.dograh_base_url)
 
 
 settings = Settings()

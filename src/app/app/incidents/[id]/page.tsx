@@ -7,7 +7,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useApp } from "@/components/app/Shell";
 import { Badge, Button, Card, Input, Modal, Select, Spinner, statusTone } from "@/components/ui/Primitives";
 import { useToast } from "@/components/ui/Toast";
-import { fmtAgo, fmtTime, get, post, type Cause, type Incident } from "@/lib/api";
+import { fmtAgo, fmtTime, get, post, type Cause, type Incident, type VoiceCall } from "@/lib/api";
 
 const SUPPORT: Record<string, string> = { strong: "green", plausible: "blue", weak: "amber", inconclusive: "muted" };
 
@@ -20,6 +20,7 @@ export default function IncidentPage() {
   const [asking, setAsking] = useState(false);
   const [resolveOpen, setResolveOpen] = useState(false);
   const [fb, setFb] = useState({ verdict: "correct", actual_cause: "", fix: "" });
+  const [calling, setCalling] = useState(false);
 
   const load = useCallback(() => get<Incident>(`/api/incidents/${id}`).then(setInc), [id]);
   useEffect(() => { load(); }, [load]);
@@ -30,6 +31,19 @@ export default function IncidentPage() {
 
   async function ack() { await post(`/api/incidents/${id}/ack`); toast("success", "Acknowledged", "Escalation stops here."); load(); }
   async function reinvestigate() { await post(`/api/incidents/${id}/investigate`); toast("info", "Muse is re-investigating…"); }
+  async function callContact() {
+    if (!inc) return;
+    const sev = inc.severity;
+    const call_type = inc.status === "acknowledged" ? "resolution_followup" : sev === "emergency" ? "emergency_escalation" : sev === "warning" || sev === "info" ? "warning_notice" : "critical_alert";
+    setCalling(true);
+    try {
+      const c = await post<VoiceCall>("/api/voice/calls", { call_type, incident_id: id });
+      if (c.status === "failed") toast("error", "Call failed", c.error ?? "Dograh rejected the call");
+      else toast("success", `Muse is calling ${c.contact_name ?? c.to_number}`, `${c.title} · Gemini Live via TeleCMI ${c.from_number ?? ""}`);
+      load();
+    } catch (e) { toast("error", "Could not place call", e instanceof Error ? e.message : String(e)); }
+    finally { setCalling(false); }
+  }
   async function ask() {
     if (!q.trim()) return;
     setAsking(true);
@@ -75,7 +89,7 @@ export default function IncidentPage() {
                   <ol className="space-y-2">{r.checks.map((c) => <li key={c.order} className="flex gap-3 rounded-xl border border-line bg-white p-3 text-sm"><span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-blue font-mono text-xs text-white">{c.order}</span><div><p className="text-ink">{c.action}</p><p className="mt-0.5 text-xs text-muted">Separates: {c.discriminates} · <ShieldAlert size={11} className="inline" /> {c.safety}</p></div></li>)}</ol>
                 </div>
                 {r.missing_data.length > 0 && <div className="rounded-xl bg-sky-soft/60 p-3 text-xs text-muted"><strong className="text-ink">Missing data:</strong> {r.missing_data.join(" · ")}</div>}
-                <div className="rounded-xl border border-red/30 bg-red/5 p-3"><p className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.2em] text-red"><Phone size={12} /> Call script (≤ 20 s)</p><p className="mt-1 text-sm text-ink">“{r.call_script}”</p><p className="mt-1 text-[11px] text-muted">Voice escalation via TeleCMI + Gemini Live is planned; not wired yet.</p></div>
+                <div className="rounded-xl border border-red/30 bg-red/5 p-3"><p className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.2em] text-red"><Phone size={12} /> Call script (≤ 20 s)</p><p className="mt-1 text-sm text-ink">“{r.call_script}”</p><div className="mt-2 flex flex-wrap items-center gap-2"><Button size="sm" variant="danger" onClick={callContact} loading={calling}><Phone size={14} /> {inc.status === "acknowledged" ? "Call back: what did you find?" : "Call the on-call contact now"}</Button><Link href="/app/voice" className="text-[11px] text-blue hover:underline">Scripts, TeleCMI number & call history →</Link></div><p className="mt-1 text-[11px] text-muted">Gemini Live speaks this brief over TeleCMI; an acknowledgement on the call acknowledges the incident here.</p></div>
                 {r.guardrail && <p className="text-[11px] text-muted">Guardrail: schema {r.guardrail.schema} · {r.guardrail.unverified_numbers_removed.length} unverified number(s) removed{r.guardrail.unverified_numbers_removed.length ? ` (${r.guardrail.unverified_numbers_removed.join(", ")})` : ""}.</p>}
               </div>
             )}

@@ -2,7 +2,7 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import {
-  Activity, Bell, BookOpenCheck, Boxes, ChevronDown, Cpu, LayoutDashboard, LogOut, Menu, Radio, Settings, Siren, Users, Workflow, X,
+  Activity, Bell, BookOpenCheck, Boxes, ChevronDown, Cpu, LayoutDashboard, LogOut, Menu, PhoneCall, Radio, Settings, Siren, Users, Workflow, X,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -21,6 +21,7 @@ const NAV = [
   { href: "/app/factory", label: "3D factory", icon: Boxes },
   { href: "/app/telemetry", label: "Telemetry", icon: Radio },
   { href: "/app/incidents", label: "Incidents", icon: Siren },
+  { href: "/app/voice", label: "Voice AI · Gemini Live", icon: PhoneCall },
   { href: "/app/observability", label: "Observability", icon: Activity },
   { href: "/app/contacts", label: "Escalation contacts", icon: Users },
   { href: "/app/settings", label: "Settings & API", icon: Settings },
