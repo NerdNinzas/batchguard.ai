@@ -32,11 +32,10 @@ class Settings(BaseSettings):
     pubsub_topic_telemetry: str = "telemetry"
     bigquery_dataset: str = "batchguard"
 
-    smtp_host: str = ""
-    smtp_port: int = 587
-    smtp_user: str = ""
-    smtp_pass: str = ""
-    smtp_from: str = "BatchGuard AI <alerts@example.com>"
+    # Email via Resend (https://resend.com). Empty key → notifications recorded as "simulated".
+    resend_api_key: str = ""
+    resend_from: str = "BatchGuard AI <onboarding@resend.dev>"
+    email_asset_base: str = ""  # public base URL for images in emails (defaults to APP_URL)
 
     # Voice escalation: self-hosted Dograh (Gemini Live realtime voice) dialling out through a TeleCMI SIP trunk
     dograh_base_url: str = "https://139-59-65-115.sslip.io/api/v1"
@@ -64,8 +63,8 @@ class Settings(BaseSettings):
         return bool(self.google_api_key) or (self.google_genai_use_vertexai and bool(self.google_cloud_project))
 
     @property
-    def smtp_enabled(self) -> bool:
-        return bool(self.smtp_host and self.smtp_user)
+    def email_enabled(self) -> bool:
+        return bool(self.resend_api_key)
 
     @property
     def voice_enabled(self) -> bool:
@@ -73,6 +72,8 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+if not settings.email_asset_base:
+    settings.email_asset_base = settings.app_url
 
 # google-genai / ADK / google-cloud clients read these from the process environment, not from .env
 for _k, _v in {

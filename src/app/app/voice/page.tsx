@@ -232,40 +232,97 @@ function TestCall({ ct, status, onPlaced, onClose }: { ct: CallType; status: Voi
 }
 
 /* ---------- call detail (transcript, context, outcome) ---------- */
-function CallDetail({ id, onClose }: { id: string; onClose: () => void }) {
-  const [c, setC] = useState<VoiceCall | null>(null);
-  useEffect(() => { get<VoiceCall>(`/api/voice/calls/${id}`).then(setC).catch(() => setC(null)); }, [id]);
+const OUTCOME_LABEL: Record<string, string> = { reached_contact: "Reached the contact", acknowledged: "Acknowledged", eta_minutes: "ETA (minutes)", handoff_to: "Hand-off to", voicemail: "Voicemail", questions: "Questions asked", notes: "Notes", owner_name: "Owner", inspection_when: "Inspection", verdict: "Verdict on Muse's cause", actual_cause: "Actual cause", fix: "Fix", resolved: "Running normally", confirmed: "Line confirmed", audio_quality: "Audio quality", _extracted_by: "Extracted by" };
+const fmtClock = (iso: string) => { const d = new Date(iso); return isNaN(d.getTime()) ? "" : d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }); };
+const isTrue = (v: unknown) => v === true || String(v).toLowerCase() === "true";
+
+function OutcomeRow({ k, v }: { k: string; v: unknown }) {
+  const bool = typeof v === "boolean" || ["true", "false"].includes(String(v).toLowerCase());
   return (
-    <Modal open onClose={onClose} width="max-w-4xl" title={c ? <span className="flex items-center gap-2"><AudioLines size={22} className="text-blue" /> {c.title}</span> : "Call"}>
+    <div className="flex items-start justify-between gap-3 border-b border-line/60 py-1.5 last:border-0">
+      <span className="text-xs text-muted">{OUTCOME_LABEL[k] ?? k}</span>
+      {bool ? <Badge tone={isTrue(v) ? "green" : "muted"}>{isTrue(v) ? "yes" : "no"}</Badge> : <span className="max-w-[60%] text-right text-xs font-medium text-ink">{String(v)}</span>}
+    </div>
+  );
+}
+
+function CallDetail({ id, onClose }: { id: string; onClose: () => void }) {
+  const { toast } = useToast();
+  const [c, setC] = useState<VoiceCall | null>(null);
+  const [tech, setTech] = useState(false);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { get<VoiceCall>(`/api/voice/calls/${id}`).then(setC).catch(() => setC(null)); }, [id]);
+  async function reextract() {
+    setBusy(true);
+    try { const r = await post<VoiceCall>(`/api/voice/calls/${id}/reextract`); setC((x) => (x ? { ...x, ...r, transcript: x.transcript, turns: x.turns } : x)); toast("success", "Outcome re-extracted from the transcript"); }
+    catch (e) { toast("error", "Extraction failed", e instanceof Error ? e.message : String(e)); }
+    finally { setBusy(false); }
+  }
+  const outcome = Object.entries(c?.outcome ?? {}).filter(([k]) => k !== "_extracted_by");
+  const extractedBy = String(c?.outcome?._extracted_by ?? "");
+  const nodes = String(c?.telemetry?.nodes_visited ?? "").split(",").map((x) => x.trim()).filter(Boolean);
+  return (
+    <Modal open onClose={onClose} width="max-w-5xl" title={c ? <span className="flex items-center gap-2"><AudioLines size={22} className="text-blue" /> {c.title}</span> : "Call"}>
       {!c ? <Spinner /> : (
-        <div className="grid gap-4 lg:grid-cols-[1.2fr_1fr]">
-          <div>
-            <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
+        <div className="grid gap-5 lg:grid-cols-[1.25fr_1fr]">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
               <Badge tone={STATUS_TONE[c.status] ?? "muted"}>{c.status.replace("_", " ")}</Badge>
-              <span>{fmtTime(c.created_at)}</span><span>· to <span className="font-mono text-ink">{c.to_number}</span></span>{c.from_number && <span>· from <span className="font-mono text-ink">{c.from_number}</span></span>}
-              {c.duration_seconds != null && <span>· {Math.round(c.duration_seconds)} s</span>}{c.disposition && <span>· {c.disposition}</span>}
+              <span>{fmtTime(c.created_at)}</span>
+              <span>to <span className="font-mono text-ink">{c.to_number}</span>{c.contact_name ? ` (${c.contact_name})` : ""}</span>
+              {c.from_number && <span>from <span className="font-mono text-ink">{c.from_number}</span></span>}
+              {c.duration_seconds != null && <span>{Math.round(c.duration_seconds)} s</span>}
             </div>
             {c.error && <p className="mt-2 rounded-xl border border-red/30 bg-red/5 p-2 text-xs text-red">{c.error}</p>}
             {c.incident && <p className="mt-2 text-xs text-muted">Incident: <Link href={`/app/incidents/${c.incident.id}`} className="text-blue hover:underline">{c.incident.title}</Link> · {c.incident.status}</p>}
-            <p className="mt-3 font-mono text-[10px] uppercase tracking-[0.2em] text-muted">Transcript</p>
-            <pre className="mt-1 max-h-[46vh] overflow-y-auto whitespace-pre-wrap rounded-xl bg-sky-soft/50 p-3 font-sans text-[13px] leading-relaxed text-ink">{c.transcript || (c.status === "completed" ? "Transcript not available yet." : "The transcript appears once the call completes.")}</pre>
+            {nodes.length > 0 && (
+              <div className="mt-3 flex flex-wrap items-center gap-1">
+                <span className="mr-1 font-mono text-[10px] uppercase tracking-[0.2em] text-muted">Path</span>
+                {nodes.map((n, i) => <span key={i} className="flex items-center gap-1"><span className="rounded-full bg-sky-soft px-2 py-0.5 text-[11px] text-ink">{n}</span>{i < nodes.length - 1 && <ChevronRight size={12} className="text-muted" />}</span>)}
+              </div>
+            )}
+            <p className="mt-4 font-mono text-[10px] uppercase tracking-[0.2em] text-muted">Transcript</p>
+            <div className="mt-2 max-h-[48vh] space-y-2 overflow-y-auto rounded-2xl border border-line bg-[#f9fbff] p-3">
+              {(c.turns ?? []).length === 0 && <p className="text-sm text-muted">{c.status === "completed" ? "Transcript not available." : "The transcript appears once the call completes."}</p>}
+              {(c.turns ?? []).map((t, i) => (
+                <div key={i} className={`flex ${t.role === "assistant" ? "justify-start" : "justify-end"}`}>
+                  <div className={`max-w-[85%] rounded-2xl px-3.5 py-2 ${t.role === "assistant" ? "rounded-tl-md bg-white shadow-[0_6px_20px_-12px_rgba(11,26,51,.35)]" : "rounded-tr-md bg-blue text-white"}`}>
+                    <p className={`font-mono text-[9px] uppercase tracking-wider ${t.role === "assistant" ? "text-blue" : "text-white/70"}`}>{t.role === "assistant" ? "Muse" : c.contact_name ?? "Contact"} {fmtClock(t.ts) && <span className="ml-1 normal-case tracking-normal">{fmtClock(t.ts)}</span>}</p>
+                    <p className="mt-0.5 text-[13px] leading-relaxed">{t.text}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
             <div className="mt-2 flex gap-3 text-xs">
               {c.transcript_url && <a href={c.transcript_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-blue hover:underline"><FileText size={12} /> transcript file</a>}
               {c.recording_url && <a href={c.recording_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-blue hover:underline"><Play size={12} /> recording</a>}
             </div>
           </div>
-          <div className="space-y-3">
-            <div className="rounded-2xl border border-line bg-white p-3">
-              <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-red">Gathered after the call</p>
-              {!c.gathered_context || Object.keys(c.gathered_context).length === 0 ? <p className="mt-1 text-xs text-muted">Nothing extracted yet.</p> : (
-                <dl className="mt-1 space-y-1">{Object.entries(c.gathered_context).map(([k, v]) => <div key={k} className="flex gap-2 text-xs"><dt className="w-32 shrink-0 font-mono text-muted">{k}</dt><dd className="text-ink">{String(v)}</dd></div>)}</dl>
+          <div className="min-w-0 space-y-3">
+            <div className="rounded-2xl border border-line bg-white p-4">
+              <div className="flex items-center justify-between gap-2">
+                <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-red">Outcome</p>
+                {c.transcript_url && <Button size="sm" variant="ghost" onClick={reextract} loading={busy}><RefreshCw size={12} /> Re-extract</Button>}
+              </div>
+              {outcome.length === 0 ? <p className="mt-1 text-xs text-muted">{c.status === "completed" ? "Nothing extracted — press Re-extract to read the transcript with Gemini." : "Available after the call completes."}</p> : (
+                <div className="mt-1">{outcome.map(([k, v]) => <OutcomeRow key={k} k={k} v={v} />)}</div>
               )}
+              {extractedBy && <p className="mt-2 text-[10px] text-muted">extracted by {extractedBy}</p>}
             </div>
-            <div className="rounded-2xl border border-line bg-white p-3">
+            <div className="rounded-2xl border border-line bg-white p-4">
               <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted">Brief sent to Gemini Live</p>
-              <dl className="mt-1 space-y-1">{Object.entries(c.initial_context).map(([k, v]) => <div key={k} className="flex gap-2 text-xs"><dt className="w-32 shrink-0 font-mono text-muted">{k}</dt><dd className="text-ink">{v}</dd></div>)}</dl>
+              <div className="mt-1">
+                {Object.entries(c.initial_context).map(([k, v]) => (
+                  <div key={k} className="grid grid-cols-[110px_1fr] gap-2 border-b border-line/60 py-1.5 text-xs last:border-0"><span className="truncate font-mono text-muted" title={k}>{k}</span><span className="break-words text-ink">{v}</span></div>
+                ))}
+              </div>
             </div>
-            <p className="text-[11px] text-muted">Placed by {c.placed_by} · Dograh run {c.run_name ?? c.run_id ?? "—"} · workflow #{c.workflow_id}</p>
+            <button onClick={() => setTech((t) => !t)} className="text-[11px] text-muted hover:text-ink">{tech ? "Hide" : "Show"} call telemetry · Dograh run {c.run_name ?? c.run_id ?? "—"} · workflow #{c.workflow_id} · placed by {c.placed_by}</button>
+            {tech && (
+              <div className="rounded-2xl border border-dashed border-line bg-sky-soft/30 p-3">
+                {Object.entries(c.telemetry ?? {}).map(([k, v]) => <div key={k} className="grid grid-cols-[150px_1fr] gap-2 py-1 text-[11px]"><span className="truncate font-mono text-muted">{k}</span><span className="break-all font-mono text-ink">{String(v)}</span></div>)}
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -443,15 +500,15 @@ export default function VoicePage() {
               <thead><tr className="text-left font-mono text-[10px] uppercase tracking-wider text-muted"><th className="py-2 pr-3">When</th><th className="pr-3">Call</th><th className="pr-3">To</th><th className="pr-3">Status</th><th className="pr-3">Outcome</th><th className="pr-3">Length</th><th /></tr></thead>
               <tbody>
                 {calls.map((c) => {
-                  const g = c.gathered_context ?? {};
-                  const ack = g.acknowledged === true || String(g.acknowledged).toLowerCase() === "true";
+                  const g = c.outcome ?? {};
+                  const ack = isTrue(g.acknowledged);
                   return (
                     <tr key={c.id} className="border-t border-line/70 hover:bg-sky-soft/40">
                       <td className="py-2 pr-3 font-mono text-[11px] text-muted">{fmtTime(c.created_at)}</td>
                       <td className="pr-3"><p className="text-ink">{c.title}</p>{c.incident_id && <Link href={`/app/incidents/${c.incident_id}`} className="text-[11px] text-blue hover:underline">incident →</Link>}</td>
                       <td className="pr-3"><p className="font-mono text-xs text-ink">{c.to_number}</p><p className="text-[11px] text-muted">{c.contact_name ?? "custom"}</p></td>
                       <td className="pr-3"><Badge tone={STATUS_TONE[c.status] ?? "muted"}>{c.status.replace("_", " ")}</Badge>{c.error && <p className="mt-0.5 max-w-[220px] truncate text-[10px] text-red" title={c.error}>{c.error}</p>}</td>
-                      <td className="pr-3 text-xs">{ack ? <span className="inline-flex items-center gap-1 text-green"><CheckCircle2 size={12} /> acknowledged{g.eta_minutes != null && g.eta_minutes !== "" ? ` · ETA ${String(g.eta_minutes)} min` : ""}</span> : g.verdict ? <span className="text-ink">verdict: {String(g.verdict)}</span> : g.confirmed === true ? <span className="text-green">line confirmed</span> : <span className="text-muted">{c.disposition ?? "—"}</span>}</td>
+                      <td className="pr-3 text-xs">{ack ? <span className="inline-flex items-center gap-1 text-green"><CheckCircle2 size={12} /> acknowledged{g.eta_minutes != null && g.eta_minutes !== "" ? ` · ETA ${String(g.eta_minutes)} min` : ""}</span> : g.verdict ? <span className="text-ink">verdict: {String(g.verdict)}</span> : isTrue(g.confirmed) ? <span className="text-green">line confirmed</span> : <span className="text-muted">{c.disposition ?? "—"}</span>}</td>
                       <td className="pr-3 font-mono text-xs text-muted">{c.duration_seconds != null ? `${Math.round(c.duration_seconds)} s` : "—"}</td>
                       <td className="text-right"><button onClick={() => setDetail(c.id)} className="inline-flex items-center gap-1 text-xs text-blue hover:underline"><FileText size={12} /> transcript</button></td>
                     </tr>

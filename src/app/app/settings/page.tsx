@@ -1,5 +1,6 @@
 "use client";
 
+import { ExternalLink, Mail, Send } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useApp } from "@/components/app/Shell";
 import { Badge, Button, Card, Input, Select, Spinner, Stat } from "@/components/ui/Primitives";
@@ -7,13 +8,54 @@ import { useToast } from "@/components/ui/Toast";
 import { fmtAgo, get, post, type Machine } from "@/lib/api";
 
 type Score = { runs: { id: string; machine_id: string; injected_fault: string; injected_at: number; detected: boolean; detect_delay: number | null; top1: boolean; top3: boolean; predicted: string[]; report_source?: string | null }[]; summary: { runs: number; detected: number; top1: number; top3: number; mean_detect_delay: number } };
-type Health = { gemini: boolean; smtp: boolean };
+type Health = { gemini: boolean; email: boolean; voice: boolean; vertex: boolean; cloud: { project: string | null; firestore: boolean; pubsub: boolean; bigquery: boolean; gcs: boolean } };
+type EmailInfo = { enabled: boolean; from: string; templates: string[]; asset_base: string };
+const TEMPLATE_LABEL: Record<string, string> = { incident_opened: "Incident opened", incident_escalated: "Escalation", report_ready: "Muse's report", incident_resolved: "Resolved", voice_summary: "Voice call summary", daily_digest: "Daily digest", welcome: "Welcome", test: "Test" };
+
+function EmailCard({ email }: { email: EmailInfo | null }) {
+  const { user } = useApp();
+  const { toast } = useToast();
+  const [preview, setPreview] = useState("incident_opened");
+  const [sending, setSending] = useState(false);
+  async function sendTest() {
+    setSending(true);
+    try {
+      const r = await post<{ status: string; to: string; from: string }>("/api/notifications/test-email");
+      if (r.status.startsWith("sent")) toast("success", `Test email sent to ${r.to}`, `from ${r.from}`);
+      else if (r.status === "simulated") toast("warning", "Simulated — no RESEND_API_KEY yet", "Add the key to backend/.env and the same email goes out for real.");
+      else toast("error", "Resend rejected the email", r.status);
+    } catch (e) { toast("error", "Could not send", e instanceof Error ? e.message : String(e)); }
+    finally { setSending(false); }
+  }
+  return (
+    <Card title={<span className="flex items-center gap-2"><Mail size={18} className="text-blue" /> Email · Resend</span>} action={email && <Badge tone={email.enabled ? "green" : "amber"}>{email.enabled ? "live" : "simulated"}</Badge>}>
+      {!email ? <Spinner /> : (
+        <div className="grid gap-4 lg:grid-cols-[260px_1fr]">
+          <div className="space-y-3">
+            <p className="text-sm text-muted">Every alert Muse sends is a branded template with the Muse portrait: incidents, escalations, the investigation report, resolutions, voice call summaries, the daily digest and the welcome mail.</p>
+            <div className="rounded-xl border border-line bg-white p-3 text-xs"><p className="text-muted">From</p><p className="font-mono text-ink">{email.from}</p><p className="mt-2 text-muted">Images served from</p><p className="truncate font-mono text-ink" title={email.asset_base}>{email.asset_base}</p></div>
+            <Button onClick={sendTest} loading={sending} className="w-full"><Send size={15} /> Send me a test email</Button>
+            <p className="text-[11px] text-muted">Goes to {user.email}. {email.enabled ? "" : "RESEND_API_KEY is empty, so the backend records it as simulated."}</p>
+            <div className="flex flex-wrap gap-1.5">
+              {email.templates.map((t) => <button key={t} onClick={() => setPreview(t)} className={`rounded-full border px-2.5 py-1 text-[11px] ${preview === t ? "border-blue bg-sky-soft text-blue" : "border-line bg-white text-muted hover:text-ink"}`}>{TEMPLATE_LABEL[t] ?? t}</button>)}
+            </div>
+          </div>
+          <div className="min-w-0">
+            <div className="mb-1.5 flex items-center justify-between text-xs text-muted"><span>Preview · {TEMPLATE_LABEL[preview] ?? preview} (sample data)</span><a href={`/api/email/preview/${preview}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-blue hover:underline">open <ExternalLink size={11} /></a></div>
+            <iframe title="email preview" src={`/api/email/preview/${preview}`} className="h-[520px] w-full rounded-2xl border border-line bg-[#f6f9ff]" sandbox="" />
+          </div>
+        </div>
+      )}
+    </Card>
+  );
+}
 
 export default function SettingsPage() {
   const { user, refreshUser } = useApp();
   const { toast } = useToast();
   const [org, setOrg] = useState({ name: user.org?.name ?? "", owner_name: user.org?.owner_name ?? "", owner_email: user.org?.owner_email ?? "", phone: user.org?.phone ?? "", industry: user.org?.industry ?? "", size: user.org?.size ?? "", timezone: user.org?.timezone ?? "Asia/Singapore" });
   const [health, setHealth] = useState<Health | null>(null);
+  const [email, setEmail] = useState<EmailInfo | null>(null);
   const [score, setScore] = useState<Score | null>(null);
   const [machines, setMachines] = useState<Machine[]>([]);
   const [run, setRun] = useState({ machine_id: "", injected_fault: "bearing_wear", note: "" });
@@ -21,6 +63,7 @@ export default function SettingsPage() {
   const loadScore = () => get<Score>("/api/eval/scoreboard").then(setScore);
   useEffect(() => {
     get<Health>("/api/health").then(setHealth);
+    get<EmailInfo>("/api/email/templates").then(setEmail).catch(() => setEmail({ enabled: false, from: "", templates: [], asset_base: "" }));
     get<Machine[]>("/api/machines").then((ms) => { setMachines(ms); if (ms[0]) setRun((r) => ({ ...r, machine_id: ms[0].id })); });
     loadScore();
   }, []);
@@ -45,11 +88,11 @@ export default function SettingsPage() {
           {!health ? <Spinner /> : (
             <div className="space-y-2 text-sm">
               {[
-                ["Gemini on Vertex AI / AI Studio (ADK agent, PDF extraction)", health.gemini, "GOOGLE_API_KEY in backend/.env"],
+                ["Gemini on Vertex AI (ADK agent, PDF extraction, call outcomes)", health.gemini, health.vertex ? "Vertex AI · GOOGLE_CLOUD_PROJECT" : "GOOGLE_API_KEY in backend/.env"],
                 ["Firebase Auth (Google sign-in)", Boolean(process.env.NEXT_PUBLIC_FIREBASE_API_KEY), "NEXT_PUBLIC_FIREBASE_* in .env.local + FIREBASE_PROJECT_ID in backend/.env"],
-                ["Email escalation (SMTP)", health.smtp, "SMTP_HOST / SMTP_USER / SMTP_PASS in backend/.env"],
-                ["Voice escalation (TeleCMI + Gemini Live)", false, "planned — TELECMI_* and GEMINI_LIVE_MODEL reserved"],
-                ["Firestore · BigQuery · Pub/Sub · Cloud Storage", false, "local SQLite now; adapters land with GCP credentials"],
+                ["Email via Resend (Muse templates)", health.email, "RESEND_API_KEY / RESEND_FROM in backend/.env"],
+                ["Voice escalation (Dograh · Gemini Live · TeleCMI)", health.voice, "DOGRAH_API_KEY in backend/.env · numbers on /app/voice"],
+                ["Firestore · BigQuery · Pub/Sub · Cloud Storage", Boolean(health.cloud?.firestore), health.cloud?.project ? `project ${health.cloud.project}` : "GCP_PROJECT in backend/.env"],
               ].map(([k, ok, hint]) => (
                 <div key={String(k)} className="flex items-start justify-between gap-3 rounded-xl border border-line bg-white p-3"><div><p className="font-semibold text-ink">{k}</p><p className="text-xs text-muted">{hint}</p></div><Badge tone={ok ? "green" : "amber"}>{ok ? "enabled" : "off"}</Badge></div>
               ))}
@@ -57,6 +100,8 @@ export default function SettingsPage() {
           )}
         </Card>
       </div>
+
+      <EmailCard email={email} />
 
       <Card title="Blind evaluation" action={score && <Badge tone="violet">{score.summary.runs} run(s)</Badge>}>
         <p className="text-sm text-muted">Record the hidden fault label first (stored where the agent&apos;s tools cannot read it), then start the fault on the device. The first incident after that timestamp is scored against the label.</p>

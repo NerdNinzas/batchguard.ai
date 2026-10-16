@@ -147,6 +147,10 @@ def resolve(incident_id: str, feedback: dict[str, Any] | None) -> dict[str, Any]
     _update_machine_status(inc["machine_id"])
     inc = row(conn().execute("SELECT * FROM incidents WHERE id=?", (incident_id,)).fetchone())
     bus.publish(inc["org_id"], "incident", {**inc, "signals": uj(inc["signals"], [])})
+    try:
+        notify.on_incident_resolved(inc, _machine(inc["machine_id"]), feedback)
+    except Exception as e:  # noqa: BLE001
+        print("resolve mail error:", e)
     return inc
 
 

@@ -76,9 +76,17 @@ def set_use_cases(body: UseCasesIn, org: dict[str, Any] = Depends(current_org)) 
 
 
 @router.post("/org/complete-onboarding")
-def complete(org: dict[str, Any] = Depends(current_org)) -> dict[str, Any]:
+def complete(org: dict[str, Any] = Depends(current_org), user: dict[str, Any] = Depends(current_user)) -> dict[str, Any]:
+    first = not org.get("onboarded")
     with tx() as c:
         c.execute("UPDATE orgs SET onboarded=1 WHERE id=?", (org["id"],))
+    if first:
+        try:
+            from .. import notify
+
+            notify.on_welcome(org, user)
+        except Exception as e:  # noqa: BLE001
+            print("welcome mail error:", e)
     return {"ok": True}
 
 

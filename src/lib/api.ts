@@ -86,7 +86,8 @@ export type VoiceCall = {
   id: string; incident_id: string | null; contact_id: string | null; contact_name: string | null; call_type: string; title: string; to_number: string; from_number: string | null;
   workflow_id: number | null; workflow_uuid: string | null; run_id: number | null; run_name: string | null; status: string; duration_seconds: number | null; disposition: string | null;
   initial_context: Record<string, string>; gathered_context: Record<string, unknown> | null; transcript_url: string | null; recording_url: string | null; error: string | null;
-  placed_by: string; created_at: number; updated_at: number; transcript?: string; incident?: { id: string; title: string; severity: string; status: string } | null;
+  placed_by: string; created_at: number; updated_at: number; outcome: Record<string, unknown>; telemetry: Record<string, unknown>;
+  transcript?: string; turns?: { ts: string; role: string; text: string }[]; incident?: { id: string; title: string; severity: string; status: string } | null;
 };
 export type Notification = { id: string; incident_id?: string | null; channel: string; contact_id?: string | null; to_addr?: string | null; subject: string; body: string; status: string; sent_at: number; read: number };
 

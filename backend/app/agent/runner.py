@@ -78,6 +78,14 @@ def investigate_async(incident_id: str) -> None:
     inc = row(conn().execute("SELECT * FROM incidents WHERE id=?", (incident_id,)).fetchone())
     bus.publish(inc["org_id"], "incident", {**inc, "signals": signals, "report": report})
     cloud.mirror("incidents", incident_id, inc)
+    if report is not None and inc.get("status") != "resolved":
+        try:
+            from .. import notify
+
+            m = row(conn().execute("SELECT * FROM machines WHERE id=?", (inc["machine_id"],)).fetchone()) or {}
+            notify.on_report_ready(inc, m, report)
+        except Exception as e:  # noqa: BLE001
+            print("report mail error:", e)
 
 
 def ask(incident_id: str, question: str) -> str:

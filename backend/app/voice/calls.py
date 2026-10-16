@@ -255,7 +255,96 @@ def public(call: dict[str, Any]) -> dict[str, Any]:
     c["initial_context"] = uj(c.get("initial_context"), {}) if isinstance(c.get("initial_context"), str) else c.get("initial_context") or {}
     c["gathered_context"] = uj(c.get("gathered_context"), None) if isinstance(c.get("gathered_context"), str) else c.get("gathered_context")
     c["title"] = CALL_TYPES.get(c["call_type"], {}).get("title", c["call_type"])
+    c["outcome"], c["telemetry"] = split_gathered(c["gathered_context"])
     return c
+
+
+# ---------- transcript + outcome extraction ----------
+TELEMETRY_KEYS = {"provider", "triggered_by", "call_id", "channel_name", "ext_channel_id", "bridge_id", "nodes_visited", "call_status",
+                  "call_disposition", "mapped_call_disposition", "call_tags", "hangup_cause", "sip_call_id"}
+_LINE_RE = re.compile(r"^\[(?P<ts>[^\]]+)\]\s*(?P<role>assistant|user|system|bot|agent)\s*:\s*(?P<text>.*)$", re.I)
+
+
+def parse_transcript(text: str) -> list[dict[str, str]]:
+    """Dograh transcript lines look like `[2026-10-16T11:54:08+00:00] assistant: Hello…`."""
+    out: list[dict[str, str]] = []
+    for raw in (text or "").splitlines():
+        raw = raw.strip()
+        if not raw:
+            continue
+        m = _LINE_RE.match(raw)
+        if m:
+            role = m.group("role").lower()
+            out.append({"ts": m.group("ts"), "role": "assistant" if role in ("assistant", "bot", "agent") else role, "text": m.group("text").strip()})
+        elif out:
+            out[-1]["text"] += " " + raw
+        else:
+            out.append({"ts": "", "role": "system", "text": raw})
+    return out
+
+
+def _extraction_spec(key: str) -> tuple[str, list[dict[str, str]]]:
+    for n in CALL_TYPES.get(key, {}).get("workflow_definition", {}).get("nodes", []):
+        if n.get("type") == "endCall":
+            return n["data"].get("extraction_prompt", ""), n["data"].get("extraction_variables", [])
+    return "", []
+
+
+def _heuristic_outcome(key: str, lines: list[dict[str, str]]) -> dict[str, Any]:
+    user_text = " ".join(l["text"].lower() for l in lines if l["role"] == "user")
+    out: dict[str, Any] = {"reached_contact": any(l["role"] == "user" for l in lines)}
+    yes = any(w in user_text for w in ("acknowledge", "acknowledged", "i'll take", "i will take", "on my way", "taking it", "okay i will", "yes i will", "confirmed", "हाँ", "ठीक है"))
+    if key in ("critical_alert", "emergency_escalation", "warning_notice"):
+        out["acknowledged"] = yes
+        m = re.search(r"(\d{1,3})\s*(min|minute)", user_text)
+        if m:
+            out["eta_minutes"] = int(m.group(1))
+    if key == "test_call":
+        out["confirmed"] = yes or "yes" in user_text
+    if key == "resolution_followup":
+        for v in ("correct", "partly", "wrong"):
+            if v in user_text:
+                out["verdict"] = v
+                break
+        out["resolved"] = any(w in user_text for w in ("running normally", "running fine", "it's fine", "resolved", "working now"))
+    out["_extracted_by"] = "heuristic"
+    return out
+
+
+def extract_outcome(key: str, lines: list[dict[str, str]]) -> dict[str, Any]:
+    """Fill the endCall extraction variables from the transcript with Gemini (Vertex), falling back to keyword rules."""
+    if not lines:
+        return {}
+    prompt, variables = _extraction_spec(key)
+    if not variables:
+        return {}
+    if settings.gemini_enabled:
+        try:
+            from google import genai
+            from google.genai import types
+
+            spec = "\n".join(f"- {v['name']} ({v.get('type', 'string')}): {v.get('prompt', '')}" for v in variables)
+            convo = "\n".join(f"{l['role']}: {l['text']}" for l in lines)
+            client = genai.Client()
+            resp = client.models.generate_content(
+                model=settings.gemini_model_fast,
+                contents=f"{prompt}\n\nReturn a JSON object with exactly these keys:\n{spec}\n\nUse null when the transcript does not support a value. "
+                         f"The contact may answer in Hindi or Hinglish; speech-to-text noise is possible, judge intent.\n\nTRANSCRIPT:\n{convo}",
+                config=types.GenerateContentConfig(response_mime_type="application/json", temperature=0),
+            )
+            data = json.loads(resp.text or "{}")
+            if isinstance(data, dict):
+                data["_extracted_by"] = f"gemini:{settings.gemini_model_fast}"
+                return {k: v for k, v in data.items() if v is not None}
+        except Exception as e:  # noqa: BLE001
+            print("voice extraction via gemini failed:", e)
+    return _heuristic_outcome(key, lines)
+
+
+def split_gathered(g: dict[str, Any] | None) -> tuple[dict[str, Any], dict[str, Any]]:
+    """(outcome variables, Dograh call telemetry)."""
+    g = g or {}
+    return {k: v for k, v in g.items() if k not in TELEMETRY_KEYS}, {k: v for k, v in g.items() if k in TELEMETRY_KEYS}
 
 
 # ---------- outcomes ----------
@@ -293,7 +382,22 @@ def refresh_call(call: dict[str, Any]) -> dict[str, Any]:
                   "recording_url=:recording_url, updated_at=:updated_at WHERE id=:id", patch)
     call = {**call, **patch}
     if completed and not call.get("applied"):
+        outcome, _tele = split_gathered(gathered)
+        lines = parse_transcript(dograh.fetch_text(call["transcript_url"])) if call.get("transcript_url") else []
+        if not any(k in outcome for k in ("acknowledged", "confirmed", "verdict", "resolved")):
+            # Dograh's post-call extraction did not run (e.g. its Gemini quota) → extract here
+            extracted = extract_outcome(call["call_type"], lines)
+            gathered = {**gathered, **extracted}
+            with tx() as c:
+                c.execute("UPDATE voice_calls SET gathered_context=? WHERE id=?", (j(gathered), call["id"]))
+            call["gathered_context"] = j(gathered)
         _apply_outcome(call, gathered)
+        try:
+            from .. import notify
+
+            notify.on_voice_call_completed(call, lines, split_gathered(gathered)[0])
+        except Exception as e:  # noqa: BLE001
+            print("voice summary mail error:", e)
     bus.publish(call["org_id"], "voice_call", public(call))
     return call
 

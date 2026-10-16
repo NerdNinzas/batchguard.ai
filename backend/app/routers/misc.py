@@ -8,8 +8,10 @@ from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel, Field
 from sse_starlette.sse import EventSourceResponse
 
-from .. import bus
-from ..auth import current_org
+from fastapi.responses import HTMLResponse
+
+from .. import bus, mail
+from ..auth import current_org, current_user
 from ..config import settings
 from ..db import conn, j, row, rows, tx, uj
 from ..ids import new_id, now
@@ -28,6 +30,29 @@ def mark_read(org: dict[str, Any] = Depends(current_org)) -> dict[str, bool]:
     with tx() as c:
         c.execute("UPDATE notifications SET read=1 WHERE org_id=?", (org["id"],))
     return {"ok": True}
+
+
+@router.post("/notifications/test-email")
+def test_email(org: dict[str, Any] = Depends(current_org), user: dict[str, Any] = Depends(current_user)) -> dict[str, Any]:
+    subj, html_body = mail.test_email(user)
+    status = mail.send(user["email"], subj, html_body)
+    n = {"id": new_id("ntf"), "org_id": org["id"], "incident_id": None, "channel": "email", "contact_id": None, "to_addr": user["email"],
+         "subject": subj, "body": "test email", "status": status, "sent_at": now(), "read": 1}
+    with tx() as c:
+        c.execute("INSERT INTO notifications (id, org_id, incident_id, channel, contact_id, to_addr, subject, body, status, sent_at, read) "
+                  "VALUES (:id,:org_id,:incident_id,:channel,:contact_id,:to_addr,:subject,:body,:status,:sent_at,:read)", n)
+    return {"status": status, "to": user["email"], "enabled": mail.enabled(), "from": settings.resend_from}
+
+
+@router.get("/email/templates")
+def email_templates(org: dict[str, Any] = Depends(current_org)) -> dict[str, Any]:
+    return {"enabled": mail.enabled(), "from": settings.resend_from, "templates": mail.TEMPLATES, "asset_base": settings.email_asset_base}
+
+
+@router.get("/email/preview/{kind}", response_class=HTMLResponse)
+def email_preview(kind: str, org: dict[str, Any] = Depends(current_org), user: dict[str, Any] = Depends(current_user)) -> str:
+    _, html_body = mail.render(kind, user, org)
+    return html_body
 
 
 # ---------- workflow ----------

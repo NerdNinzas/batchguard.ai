@@ -41,7 +41,7 @@ async def lifespan(app: FastAPI):
     if settings.demo_mode:
         await asyncio.to_thread(demo.ensure_seeded)
         demo.start_producer()
-    print(f"BatchGuard backend ready · gemini={('vertex:' + settings.google_cloud_location) if settings.google_genai_use_vertexai and settings.gemini_enabled else 'on' if settings.gemini_enabled else 'off (fallback)'} · gcp={settings.gcp_project or 'off'} · smtp={'on' if settings.smtp_enabled else 'simulated'} · voice={'dograh' if settings.voice_enabled else 'off'} · db={settings.db_file}")
+    print(f"BatchGuard backend ready · gemini={('vertex:' + settings.google_cloud_location) if settings.google_genai_use_vertexai and settings.gemini_enabled else 'on' if settings.gemini_enabled else 'off (fallback)'} · gcp={settings.gcp_project or 'off'} · email={'resend' if settings.email_enabled else 'simulated'} · voice={'dograh' if settings.voice_enabled else 'off'} · db={settings.db_file}")
     yield
     task.cancel()
 
@@ -74,4 +74,4 @@ for r in (auth.router, orgs.router, machines.router, device.router, incidents_ro
 
 @app.get("/api/health")
 def health() -> dict:
-    return {"ok": True, "gemini": settings.gemini_enabled, "smtp": settings.smtp_enabled, "demo": settings.demo_mode, "vertex": settings.google_genai_use_vertexai, "voice": settings.voice_enabled, "cloud": cloud.status(), "machines": conn().execute("SELECT COUNT(*) n FROM machines").fetchone()["n"]}
+    return {"ok": True, "gemini": settings.gemini_enabled, "email": settings.email_enabled, "smtp": False, "demo": settings.demo_mode, "vertex": settings.google_genai_use_vertexai, "voice": settings.voice_enabled, "cloud": cloud.status(), "machines": conn().execute("SELECT COUNT(*) n FROM machines").fetchone()["n"]}

@@ -14,6 +14,10 @@ WHAT="${1:-all}"
 DOGRAH_BASE_URL="${DOGRAH_BASE_URL:-https://139-59-65-115.sslip.io/api/v1}"
 DOGRAH_TELEPHONY_CONFIG_ID="${DOGRAH_TELEPHONY_CONFIG_ID:-2}"
 DOGRAH_FROM_PHONE_NUMBER_ID="${DOGRAH_FROM_PHONE_NUMBER_ID:-3}"
+# Email via Resend: create the secret once →  printf '%s' "$RESEND_API_KEY" | gcloud secrets create batchguard-resend-key --data-file=-
+SECRETS="AUTH_SECRET=batchguard-auth-secret:latest,DOGRAH_API_KEY=batchguard-dograh-key:latest"
+if gcloud secrets describe batchguard-resend-key --project "$PROJECT" >/dev/null 2>&1; then SECRETS="$SECRETS,RESEND_API_KEY=batchguard-resend-key:latest"; fi
+RESEND_FROM="${RESEND_FROM:-BatchGuard AI <onboarding@resend.dev>}"
 
 echo "▶ project=$PROJECT region=$REGION"
 gcloud config set project "$PROJECT" >/dev/null
@@ -25,8 +29,8 @@ deploy_backend() {
   gcloud run deploy batchguard-backend --image "$REPO/backend:latest" --region "$REGION" \
     --service-account "$SA" --allow-unauthenticated --cpu 1 --memory 1Gi --min-instances 1 --max-instances 1 \
     --cpu-boost --no-cpu-throttling --timeout 3600 --concurrency 80 --port 8080 \
-    --set-secrets "AUTH_SECRET=batchguard-auth-secret:latest,DOGRAH_API_KEY=batchguard-dograh-key:latest" \
-    --set-env-vars "GOOGLE_GENAI_USE_VERTEXAI=true,GOOGLE_CLOUD_PROJECT=$PROJECT,GOOGLE_CLOUD_LOCATION=global,GCP_PROJECT=$PROJECT,GCP_LOCATION=$REGION,GCS_BUCKET=$PROJECT-manuals,BIGQUERY_DATASET=batchguard,PUBSUB_TOPIC_TELEMETRY=telemetry,CLOUD_LOGGING=true,DEMO_MODE=true,FIREBASE_PROJECT_ID=$PROJECT,DOGRAH_BASE_URL=$DOGRAH_BASE_URL,DOGRAH_TELEPHONY_CONFIG_ID=$DOGRAH_TELEPHONY_CONFIG_ID,DOGRAH_FROM_PHONE_NUMBER_ID=$DOGRAH_FROM_PHONE_NUMBER_ID,VOICE_AUTO_DIAL=false" \
+    --set-secrets "$SECRETS" \
+    --set-env-vars "GOOGLE_GENAI_USE_VERTEXAI=true,GOOGLE_CLOUD_PROJECT=$PROJECT,GOOGLE_CLOUD_LOCATION=global,GCP_PROJECT=$PROJECT,GCP_LOCATION=$REGION,GCS_BUCKET=$PROJECT-manuals,BIGQUERY_DATASET=batchguard,PUBSUB_TOPIC_TELEMETRY=telemetry,CLOUD_LOGGING=true,DEMO_MODE=true,FIREBASE_PROJECT_ID=$PROJECT,DOGRAH_BASE_URL=$DOGRAH_BASE_URL,DOGRAH_TELEPHONY_CONFIG_ID=$DOGRAH_TELEPHONY_CONFIG_ID,DOGRAH_FROM_PHONE_NUMBER_ID=$DOGRAH_FROM_PHONE_NUMBER_ID,VOICE_AUTO_DIAL=false" --update-env-vars "^|^RESEND_FROM=$RESEND_FROM" \
     --quiet
   BACKEND_URL=$(gcloud run services describe batchguard-backend --region "$REGION" --format 'value(status.url)')
   echo "✓ backend: $BACKEND_URL"

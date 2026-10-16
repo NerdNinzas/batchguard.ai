@@ -160,8 +160,24 @@ def call_detail(cid: str, org: dict[str, Any] = Depends(current_org)) -> dict[st
         c = calls.refresh_call(c)
     out = calls.public(c)
     out["transcript"] = dograh.fetch_text(c["transcript_url"]) if c.get("transcript_url") else ""
+    out["turns"] = calls.parse_transcript(out["transcript"])
     out["incident"] = row(conn().execute("SELECT id, title, severity, status FROM incidents WHERE id=?", (c["incident_id"],)).fetchone()) if c.get("incident_id") else None
     return out
+
+
+@router.post("/calls/{cid}/reextract")
+def reextract(cid: str, org: dict[str, Any] = Depends(current_org)) -> dict[str, Any]:
+    """Re-run outcome extraction on the transcript (Gemini) and apply it to the incident."""
+    c = row(conn().execute("SELECT * FROM voice_calls WHERE id=? AND org_id=?", (cid, org["id"])).fetchone())
+    if not c or not c.get("transcript_url"):
+        raise HTTPException(404, "Call or transcript not found")
+    lines = calls.parse_transcript(dograh.fetch_text(c["transcript_url"]))
+    gathered = {**(calls.uj(c.get("gathered_context"), {}) or {}), **calls.extract_outcome(c["call_type"], lines)}
+    with calls.tx() as cx:
+        cx.execute("UPDATE voice_calls SET gathered_context=?, applied=0, updated_at=? WHERE id=?", (calls.j(gathered), calls.now(), cid))
+    c = row(conn().execute("SELECT * FROM voice_calls WHERE id=?", (cid,)).fetchone())
+    calls._apply_outcome(c, gathered)
+    return calls.public(c)
 
 
 @router.get("/runs")

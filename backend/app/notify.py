@@ -1,10 +1,8 @@
-"""Escalation channels: in-app (always), email (SMTP or simulated), voice (Dograh → Gemini Live realtime → TeleCMI)."""
+"""Escalation channels: in-app (always), email (Resend, Muse templates), voice (Dograh → Gemini Live realtime → TeleCMI)."""
 
-import smtplib
-from email.message import EmailMessage
 from typing import Any
 
-from . import bus, cloud
+from . import bus, cloud, mail
 from .config import settings
 from .db import conn, rows, tx
 from .ids import new_id, now
@@ -39,22 +37,8 @@ def _record(org_id: str, incident_id: str | None, channel: str, contact: dict[st
     return n
 
 
-def send_email(to_addr: str, subject: str, body: str) -> str:
-    if not settings.smtp_enabled or not to_addr:
-        return "simulated"
-    msg = EmailMessage()
-    msg["From"] = settings.smtp_from
-    msg["To"] = to_addr
-    msg["Subject"] = subject
-    msg.set_content(body)
-    try:
-        with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=15) as s:
-            s.starttls()
-            s.login(settings.smtp_user, settings.smtp_pass)
-            s.send_message(msg)
-        return "sent"
-    except Exception as e:  # noqa: BLE001
-        return f"failed: {e}"
+def send_email(to_addr: str, subject: str, html_body: str) -> str:
+    return mail.send(to_addr, subject, html_body)
 
 
 def _incident_text(inc: dict[str, Any], m: dict[str, Any]) -> tuple[str, str]:
@@ -76,7 +60,8 @@ def on_incident_opened(inc: dict[str, Any], m: dict[str, Any]) -> None:
         contacts = _contacts(org_id)
         primary = contacts[0] if contacts else None
         if primary and primary.get("email"):
-            _record(org_id, inc["id"], "email", primary, subject, body, send_email(primary["email"], subject, body))
+            subj, html_body = mail.incident_opened(inc, m, primary)
+            _record(org_id, inc["id"], "email", primary, subj, body, send_email(primary["email"], subj, html_body))
         else:
             _record(org_id, inc["id"], "email", None, subject, body, "skipped: no primary contact")
     if sev in ("critical", "emergency"):
@@ -92,7 +77,8 @@ def on_incident_escalated(inc: dict[str, Any], m: dict[str, Any], level: int = 0
     target = contacts[min(level, len(contacts) - 1)] if contacts else None
     _record(org_id, inc["id"], "in_app", None, subject, f"Escalated to {inc['severity']}: {inc['title']}", "delivered")
     if target and target.get("email"):
-        _record(org_id, inc["id"], "email", target, subject, body, send_email(target["email"], subject, body))
+        subj, html_body = mail.incident_escalated(inc, m, target, level)
+        _record(org_id, inc["id"], "email", target, subj, body, send_email(target["email"], subj, html_body))
     if inc["severity"] in ("critical", "emergency"):
         _voice(org_id, inc, m, target, level=level)
 
@@ -114,6 +100,42 @@ def _voice(org_id: str, inc: dict[str, Any], m: dict[str, Any], contact: dict[st
         _record(org_id, inc["id"], "voice", contact, subject, f"Muse is calling {contact['name']} ({queued['call_type']}) via TeleCMI · Gemini Live", "dialing")
     else:
         _record(org_id, inc["id"], "voice", contact, subject, f"Auto-dial off — call {contact['name']} from the incident page (Gemini Live via TeleCMI)", "ready")
+
+
+def on_report_ready(inc: dict[str, Any], m: dict[str, Any], report: dict[str, Any]) -> None:
+    """Muse finished investigating: mail the evidence-backed report to the primary contact (warning and above)."""
+    if inc.get("severity") not in ("warning", "critical", "emergency"):
+        return
+    contacts = _contacts(inc["org_id"])
+    primary = contacts[0] if contacts else None
+    if not primary or not primary.get("email"):
+        return
+    subj, html_body = mail.report_ready(inc, m, report, primary)
+    _record(inc["org_id"], inc["id"], "email", primary, subj, (report.get("summary") or "")[:300], send_email(primary["email"], subj, html_body))
+
+
+def on_incident_resolved(inc: dict[str, Any], m: dict[str, Any], feedback: dict[str, Any] | None) -> None:
+    contacts = _contacts(inc["org_id"])
+    primary = contacts[0] if contacts else None
+    _record(inc["org_id"], inc["id"], "in_app", None, f"Resolved: {inc['title']}", (feedback or {}).get("actual_cause") or "closed", "delivered")
+    if primary and primary.get("email") and (feedback or {}).get("verdict") != "auto":
+        subj, html_body = mail.incident_resolved(inc, m, feedback)
+        _record(inc["org_id"], inc["id"], "email", primary, subj, "resolved", send_email(primary["email"], subj, html_body))
+
+
+def on_welcome(org: dict[str, Any], user: dict[str, Any]) -> None:
+    to = user.get("email") or org.get("owner_email")
+    subj, html_body = mail.welcome(org, user)
+    _record(org["id"], None, "email", {"id": None, "email": to}, subj, "welcome", send_email(to, subj, html_body))
+
+
+def on_voice_call_completed(call: dict[str, Any], transcript_lines: list[dict[str, str]], outcome: dict[str, Any]) -> None:
+    contacts = _contacts(call["org_id"])
+    primary = contacts[0] if contacts else None
+    if not primary or not primary.get("email"):
+        return
+    subj, html_body = mail.voice_summary(call, transcript_lines, outcome, primary)
+    _record(call["org_id"], call.get("incident_id"), "email", primary, subj, f"call summary {call['id']}", send_email(primary["email"], subj, html_body))
 
 
 def daily_digest_text(org_id: str) -> str:
