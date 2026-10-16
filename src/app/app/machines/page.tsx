@@ -5,6 +5,7 @@ import { ArrowRight, Plus } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useApp } from "@/components/app/Shell";
+import { useHighlight } from "@/components/muse/MuseLive";
 import { HealthRing } from "@/components/app/charts";
 import { TrendingDown, TrendingUp } from "lucide-react";
 import { Badge, Button, Empty, Spinner, StatusDot, statusTone } from "@/components/ui/Primitives";
@@ -39,7 +40,18 @@ export default function MachinesPage() {
       </div>
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {machines.map((m) => (
-          <Link key={m.id} href={`/app/machines/${m.id}`} className="card group overflow-hidden rounded-2xl transition hover:-translate-y-0.5 hover:border-blue/50">
+          <MachineCard key={m.id} m={m} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+
+function MachineCard({ m }: { m: Machine }) {
+  const hl = useHighlight(m.id);
+  return (
+    <Link data-hl={m.id} href={`/app/machines/${m.id}`} className={`card group overflow-hidden rounded-2xl transition hover:-translate-y-0.5 hover:border-blue/50 ${hl.className}`}>
             <div className="relative h-36 overflow-hidden">
               <img src={machineType(m.type)?.image ?? "/machines/conveyor.jpg"} alt="" className="h-full w-full object-cover transition duration-700 group-hover:scale-105" />
               <div className="absolute inset-0 bg-gradient-to-t from-ink/85 via-ink/25 to-transparent" />
@@ -77,9 +89,6 @@ export default function MachinesPage() {
               })}
             </div>
             </div>
-          </Link>
-        ))}
-      </div>
-    </div>
+    </Link>
   );
 }

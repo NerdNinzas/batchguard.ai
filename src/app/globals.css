@@ -112,3 +112,11 @@ input[type="range"] { accent-color: var(--blue); }
   font-family: var(--font-barlow-condensed), var(--font-barlow), system-ui, sans-serif;
   letter-spacing: -0.005em;
 }
+
+/* Muse navigated here: light-yellow highlight that settles after a few seconds */
+@keyframes muse-hl {
+  0% { background-color: #fff3b0; box-shadow: 0 0 0 6px rgba(250, 204, 21, 0.45); }
+  60% { background-color: #fffbe6; box-shadow: 0 0 0 4px rgba(250, 204, 21, 0.35); }
+  100% { background-color: #fffbe6; box-shadow: 0 0 0 3px rgba(250, 204, 21, 0.3); }
+}
+.muse-highlight { animation: muse-hl 1.4s ease-out 3; background-color: #fffbe6 !important; box-shadow: 0 0 0 3px rgba(250, 204, 21, 0.3); border-color: #facc15 !important; }

@@ -4,6 +4,7 @@ import { Siren } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useApp } from "@/components/app/Shell";
+import { useHighlight } from "@/components/muse/MuseLive";
 import { Badge, Button, Empty, Spinner, statusTone } from "@/components/ui/Primitives";
 import { fmtAgo, get, type Incident } from "@/lib/api";
 
@@ -22,7 +23,19 @@ export default function IncidentsPage() {
       {list.length === 0 ? <Empty title="No incidents" body="When detection fires, Muse opens one incident per machine, investigates it and posts the report here." /> : (
         <div className="space-y-2">
           {list.map((i) => (
-            <Link key={i.id} href={`/app/incidents/${i.id}`} className="card flex items-center gap-4 rounded-2xl p-4 transition hover:border-blue/50">
+            <IncidentRow key={i.id} i={i} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+
+function IncidentRow({ i }: { i: Incident }) {
+  const hl = useHighlight(i.id);
+  return (
+    <Link data-hl={i.id} href={`/app/incidents/${i.id}`} className={`card flex items-center gap-4 rounded-2xl p-4 transition hover:border-blue/50 ${hl.className}`}>
               <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl ${i.severity === "critical" || i.severity === "emergency" ? "bg-red/10 text-red" : i.severity === "warning" ? "bg-amber/10 text-amber" : "bg-blue/10 text-blue"}`}><Siren size={18} /></span>
               <div className="min-w-0 flex-1">
                 <p className="truncate font-semibold text-ink">{i.title}</p>
@@ -30,10 +43,6 @@ export default function IncidentsPage() {
               </div>
               <Badge tone={statusTone(i.severity)}>{i.severity}</Badge>
               <Badge tone={statusTone(i.status)}>{i.status}</Badge>
-            </Link>
-          ))}
-        </div>
-      )}
-    </div>
+    </Link>
   );
 }

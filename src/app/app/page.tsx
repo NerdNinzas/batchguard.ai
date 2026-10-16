@@ -6,6 +6,7 @@ import { Activity, ArrowRight, Bot, CheckCircle2, Clock, Cpu, PhoneCall, ShieldC
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useApp } from "@/components/app/Shell";
+import { MuseConsole } from "@/components/muse/MuseConsole";
 import { Bars, HealthRing, Sparkline } from "@/components/app/charts";
 import { Badge, Button, Empty, Spinner, StatusDot, statusTone } from "@/components/ui/Primitives";
 import { fmtAgo, fmtTime, get } from "@/lib/api";
@@ -71,6 +72,8 @@ export default function OverviewPage() {
 
   return (
     <div className="space-y-6">
+      <MuseConsole />
+
       {/* hero */}
       <section className="relative overflow-hidden rounded-3xl text-white shadow-[0_24px_60px_-24px_rgba(11,26,51,.6)]">
         <img src="/machines/conveyor.jpg" alt="" className="absolute inset-0 h-full w-full object-cover" />

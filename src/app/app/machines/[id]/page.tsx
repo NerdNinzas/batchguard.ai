@@ -8,6 +8,7 @@ import { useCallback, useEffect, useState } from "react";
 import { KeyReveal } from "@/components/app/KeyReveal";
 import { WorkOrdersBoard } from "@/components/app/WorkOrders";
 import { useApp } from "@/components/app/Shell";
+import { useHighlight } from "@/components/muse/MuseLive";
 import { HealthRing, LimitChart } from "@/components/app/charts";
 import { Badge, Button, Card, Modal, Spinner, StatusDot, statusTone } from "@/components/ui/Primitives";
 import { useToast } from "@/components/ui/Toast";
@@ -29,6 +30,7 @@ export default function MachinePage() {
   const [rotated, setRotated] = useState<{ api_key: string; code: Record<string, string> } | null>(null);
   const [confirmDel, setConfirmDel] = useState(false);
   const [contacts, setContacts] = useState<Contact[]>([]);
+  const hl = useHighlight(id);
   useEffect(() => { get<Contact[]>("/api/contacts").then(setContacts).catch(() => setContacts([])); }, []);
 
   const load = useCallback(async () => {
@@ -83,7 +85,7 @@ export default function MachinePage() {
 
   return (
     <div className="space-y-6">
-      <div className="card relative overflow-hidden rounded-3xl">
+      <div data-hl={id} className={`card relative overflow-hidden rounded-3xl ${hl.className}`}>
         <img src={machineType(m.type)?.image ?? "/machines/conveyor.jpg"} alt="" className="absolute inset-0 h-full w-full object-cover" />
         <div className="absolute inset-0 bg-gradient-to-r from-[#0b1a33]/95 via-[#0b1a33]/75 to-[#0b1a33]/30" />
         <div className="relative flex flex-wrap items-center gap-4 p-6">

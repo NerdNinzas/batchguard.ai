@@ -22,6 +22,10 @@ class Settings(BaseSettings):
     google_cloud_location: str = "us-central1"
     gemini_model_fast: str = "gemini-2.5-flash"
     gemini_model_pro: str = "gemini-2.5-pro"
+    # Gemini Live (realtime voice for the Muse copilot) — Vertex AI, native audio
+    gemini_live_model: str = "gemini-live-2.5-flash-native-audio"
+    gemini_live_location: str = "us-central1"
+    gemini_live_voice: str = "Aoede"
 
     gcp_project: str = ""
     gcp_location: str = "asia-southeast1"

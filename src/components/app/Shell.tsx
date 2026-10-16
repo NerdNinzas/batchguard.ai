@@ -8,6 +8,8 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { MuseChip } from "@/components/muse/MuseChip";
+import { MuseVoiceBar } from "@/components/muse/MuseConsole";
+import { MuseLiveProvider } from "@/components/muse/MuseLive";
 import { MuseLogo } from "@/components/muse/MuseLogo";
 import { Badge } from "@/components/ui/Primitives";
 import { useToast } from "@/components/ui/Toast";
@@ -110,6 +112,7 @@ export function Shell({ children }: { children: ReactNode }) {
 
   return (
     <Ctx.Provider value={ctx}>
+      <MuseLiveProvider>
       <div className="flex min-h-screen bg-bg">
         {/* sidebar */}
         <aside className={`fixed inset-y-0 left-0 z-40 w-64 border-r border-line bg-white transition-transform lg:static lg:translate-x-0 ${open ? "translate-x-0" : "-translate-x-full"}`}>
@@ -213,8 +216,10 @@ export function Shell({ children }: { children: ReactNode }) {
           <main className="flex-1 p-4 sm:p-6">{children}</main>
         </div>
 
-        <MuseChip line={museLine} />
+        {pathname !== "/app" && <MuseChip line={museLine} />}
+        {pathname !== "/app" && <MuseVoiceBar />}
       </div>
+      </MuseLiveProvider>
     </Ctx.Provider>
   );
 }

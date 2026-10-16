@@ -6,6 +6,7 @@ import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { PhotoEvidence } from "@/components/app/PhotoEvidence";
 import { useApp } from "@/components/app/Shell";
+import { useHighlight } from "@/components/muse/MuseLive";
 import { WorkOrdersBoard } from "@/components/app/WorkOrders";
 import { Badge, Button, Card, Input, Modal, Select, Spinner, statusTone } from "@/components/ui/Primitives";
 import { useToast } from "@/components/ui/Toast";
@@ -23,6 +24,7 @@ export default function IncidentPage() {
   const [resolveOpen, setResolveOpen] = useState(false);
   const [fb, setFb] = useState({ verdict: "correct", actual_cause: "", fix: "" });
   const [calling, setCalling] = useState(false);
+  const hl = useHighlight(id);
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [makingWo, setMakingWo] = useState(false);
   useEffect(() => { get<Contact[]>("/api/contacts").then(setContacts).catch(() => setContacts([])); }, []);
@@ -69,7 +71,7 @@ export default function IncidentPage() {
 
   return (
     <div className="space-y-5">
-      <div className="card rounded-2xl p-5">
+      <div data-hl={id} className={`card rounded-2xl p-5 ${hl.className}`}>
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <div className="flex flex-wrap items-center gap-2"><Badge tone={statusTone(inc.severity)}>{inc.severity}</Badge><Badge tone={statusTone(inc.status)}>{inc.status}</Badge>{inc.escalation_level > 0 && <Badge tone="red">escalation level {inc.escalation_level}</Badge>}<Badge tone="muted">{inc.id}</Badge></div>
