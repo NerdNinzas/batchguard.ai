@@ -45,7 +45,7 @@ def _telephony(force: bool = False) -> dict[str, Any]:
 
 def _call_types(org: dict[str, Any]) -> list[dict[str, Any]]:
     st = calls.get_settings(org["id"])
-    return [{**calls.CALL_TYPES[k], "synced": st["workflows"].get(k)} for k in calls.ORDER if k in calls.CALL_TYPES]
+    return [{**calls.CALL_TYPES[k], "synced": st["workflows"].get(k), "scenarios": calls.scenarios_for(k)} for k in calls.ORDER if k in calls.CALL_TYPES]
 
 
 @router.get("/status")
@@ -114,6 +114,7 @@ class CallIn(BaseModel):
     contact_id: str | None = None
     incident_id: str | None = None
     context: dict[str, Any] = Field(default_factory=dict)
+    scenario: str | None = None
     draft: bool = False
 
 
@@ -131,7 +132,7 @@ def place(body: CallIn, org: dict[str, Any] = Depends(current_org), user: dict[s
         contact = row(conn().execute("SELECT * FROM contacts WHERE org_id=? ORDER BY escalation_order LIMIT 1", (org["id"],)).fetchone())
     phone = body.phone or (contact or {}).get("phone") or ""
     try:
-        return calls.place_call(org, body.call_type, phone, contact=contact, incident=incident, overrides=body.context, placed_by=user.get("email") or "user", draft=body.draft)
+        return calls.place_call(org, body.call_type, phone, contact=contact, incident=incident, overrides=body.context, placed_by=user.get("email") or "user", draft=body.draft, scenario=body.scenario)
     except ValueError as e:
         raise HTTPException(400, str(e)) from e
 

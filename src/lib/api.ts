@@ -80,6 +80,7 @@ export type CallType = {
   key: string; title: string; icon: string; tone: string; description: string; trigger: string; severity: string[];
   variables: { name: string; description: string; example: string }[]; template_variables: { name: string; default: string }[];
   workflow_definition: { nodes: WfNode[]; edges: WfEdge[] }; synced: VoiceWorkflowRef | null;
+  scenarios: { key: string; label: string; severity: string; context: Record<string, string> }[];
 };
 export type VoiceCall = {
   id: string; incident_id: string | null; contact_id: string | null; contact_name: string | null; call_type: string; title: string; to_number: string; from_number: string | null;

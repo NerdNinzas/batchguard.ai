@@ -176,6 +176,61 @@ function PlaceCall({ ct, status, incidents, onPlaced }: { ct: CallType; status: 
   );
 }
 
+/* ---------- quick test call: owner name + number + a condition preset ---------- */
+const LANGS = ["English", "Hindi", "Hinglish (Hindi + English)", "Gujarati", "Tamil", "Marathi"];
+function TestCall({ ct, status, onPlaced, onClose }: { ct: CallType; status: VoiceStatus; onPlaced: (c: VoiceCall) => void; onClose: () => void }) {
+  const { toast } = useToast();
+  const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [scenario, setScenario] = useState(ct.scenarios[0]?.key ?? "");
+  const [lang, setLang] = useState(LANGS[0]);
+  const [busy, setBusy] = useState(false);
+  const sc = ct.scenarios.find((x) => x.key === scenario);
+  const hasPhone = phone.replace(/[^\d]/g, "").length >= 8;
+
+  async function go() {
+    if (!name.trim()) return toast("warning", "Owner name is required", "Muse greets the person by this name.");
+    if (!hasPhone) return toast("warning", "Enter the number to call", "International format, e.g. +91 98765 43210");
+    setBusy(true);
+    try {
+      const c = await post<VoiceCall>("/api/voice/calls", { call_type: ct.key, phone: phone.trim(), scenario: scenario || undefined, context: { contact_name: name.trim(), contact_role: "Owner", lang } });
+      if (c.status === "failed") toast("error", "Dograh rejected the call", c.error ?? "");
+      else toast("success", `Muse is calling ${name.trim()}`, `${c.title} · from ${c.from_number ?? "default TeleCMI number"}`);
+      onPlaced(c);
+    } catch (e) { toast("error", "Could not place call", e instanceof Error ? e.message : String(e)); }
+    finally { setBusy(false); }
+  }
+
+  return (
+    <Modal open onClose={onClose} width="max-w-lg" title={<span className="flex items-center gap-2"><PhoneCall size={20} className="text-blue" /> Test call · {ct.title}</span>}>
+      <p className="text-sm text-muted">{ct.description}</p>
+      <div className="mt-4 space-y-3">
+        <Input label="Owner name (Muse will ask for this person)" placeholder="e.g. Aatif" value={name} onChange={(e) => setName(e.target.value)} autoFocus />
+        <Input label="Phone number to call" placeholder="+91 98765 43210" value={phone} onChange={(e) => setPhone(e.target.value)} hint={`Caller id ${status.settings.from_number ?? "Dograh default"} (TeleCMI)`} />
+        {ct.scenarios.length > 0 && (
+          <div>
+            <Select label="Machine condition to brief" value={scenario} onChange={(e) => setScenario(e.target.value)}>
+              {ct.scenarios.map((x) => <option key={x.key} value={x.key}>[{x.severity}] {x.label}</option>)}
+            </Select>
+            {sc && (
+              <div className="mt-2 rounded-xl border border-line bg-sky-soft/50 p-3 text-[12px] leading-relaxed">
+                <p className="text-ink"><strong>{sc.context.machine_name}</strong> · {sc.context.line_name} · <Badge tone={sc.severity === "warning" ? "amber" : "red"}>{sc.severity}</Badge></p>
+                <p className="mt-1 text-ink">{sc.context.problem}</p>
+                <p className="mt-1 text-muted"><strong className="text-ink">Likely cause:</strong> {sc.context.likely_cause}</p>
+                <p className="text-muted"><strong className="text-ink">First check:</strong> {sc.context.first_check}</p>
+                {sc.context.previous_contact && <p className="text-muted"><strong className="text-ink">Story:</strong> {sc.context.previous_contact} did not acknowledge within {sc.context.escalation_minutes} min; open for {sc.context.open_minutes} min.</p>}
+              </div>
+            )}
+          </div>
+        )}
+        <Select label="Language Muse speaks" value={lang} onChange={(e) => setLang(e.target.value)}>{LANGS.map((l) => <option key={l}>{l}</option>)}</Select>
+        <Button onClick={go} loading={busy} className="w-full" size="lg"><PhoneCall size={18} /> Call {name.trim() || "now"} with Gemini Live</Button>
+        <p className="text-center text-[11px] text-muted">Real call over TeleCMI. Greeting: “Hello, this is Muse… am I speaking with {name.trim() || "<owner>"}?”</p>
+      </div>
+    </Modal>
+  );
+}
+
 /* ---------- call detail (transcript, context, outcome) ---------- */
 function CallDetail({ id, onClose }: { id: string; onClose: () => void }) {
   const [c, setC] = useState<VoiceCall | null>(null);
@@ -230,6 +285,7 @@ export default function VoicePage() {
   const [tab, setTab] = useState<"graph" | "scripts" | "call">("graph");
   const [detail, setDetail] = useState<string | null>(null);
   const [syncing, setSyncing] = useState<string | null>(null);
+  const [testing, setTesting] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const [s, t, c, i] = await Promise.all([get<VoiceStatus>("/api/voice/status"), get<CallType[]>("/api/voice/call-types"), get<VoiceCall[]>("/api/voice/calls?limit=40"), get<Incident[]>("/api/incidents?limit=30")]);
@@ -292,7 +348,7 @@ export default function VoicePage() {
             <div className="hidden text-right sm:block">
               <p className="font-display text-lg font-semibold text-ink">Try the line</p>
               <p className="text-xs text-muted">A 30-second test call to any number.</p>
-              <Button className="mt-2" onClick={() => { setOpen("test_call"); setTab("call"); }}><PhoneCall size={16} /> Place test call</Button>
+              <Button className="mt-2" onClick={() => setTesting("test_call")}><PhoneCall size={16} /> Place test call</Button>
             </div>
             <div className="relative h-36 w-28 shrink-0 lg:h-44 lg:w-36">
               <Image src="/muse.webp" alt="Muse" fill className="object-contain drop-shadow-[0_18px_30px_rgba(30,111,255,.25)]" sizes="150px" />
@@ -358,7 +414,7 @@ export default function VoicePage() {
         </div>
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {types.map((t) => (
-            <button key={t.key} onClick={() => { setOpen(t.key); setTab("graph"); }} className="group relative overflow-hidden rounded-3xl border border-line bg-white p-5 text-left transition hover:-translate-y-0.5 hover:border-blue/50 hover:shadow-[0_18px_40px_-24px_rgba(30,111,255,.5)]">
+            <div key={t.key} role="button" tabIndex={0} onClick={() => { setOpen(t.key); setTab("graph"); }} onKeyDown={(e) => { if (e.key === "Enter") { setOpen(t.key); setTab("graph"); } }} className="group relative cursor-pointer overflow-hidden rounded-3xl border border-line bg-white p-5 text-left transition hover:-translate-y-0.5 hover:border-blue/50 hover:shadow-[0_18px_40px_-24px_rgba(30,111,255,.5)]">
               <div className={`absolute inset-x-0 top-0 h-24 bg-gradient-to-b ${TONE_BG[t.tone] ?? TONE_BG.blue} opacity-60`} />
               <div className="relative">
                 <div className="flex items-start justify-between">
@@ -369,11 +425,12 @@ export default function VoicePage() {
                 <p className="mt-1 text-[13px] leading-relaxed text-muted">{t.description}</p>
                 <p className="mt-3 text-[11px] text-muted"><strong className="text-ink">Trigger:</strong> {t.trigger}</p>
                 <div className="mt-3 flex items-center justify-between">
-                  <span className="font-mono text-[10px] text-muted">{t.workflow_definition.nodes.length} nodes · {t.workflow_definition.edges.length} edges · {t.template_variables.length} vars</span>
+                  <span className="font-mono text-[10px] text-muted">{t.workflow_definition.nodes.length} nodes · {t.workflow_definition.edges.length} edges{t.scenarios.length ? ` · ${t.scenarios.length} conditions` : ""}</span>
                   <span className="inline-flex items-center gap-1 text-xs font-semibold text-blue">Open <ChevronRight size={14} className="transition group-hover:translate-x-0.5" /></span>
                 </div>
+                <Button size="sm" variant="secondary" className="mt-3 w-full" onClick={(e) => { e.stopPropagation(); setTesting(t.key); }}><PhoneCall size={14} /> Test call</Button>
               </div>
-            </button>
+            </div>
           ))}
         </div>
       </div>
@@ -440,6 +497,7 @@ export default function VoicePage() {
         )}
       </Modal>
 
+      {testing && types.find((t) => t.key === testing) && <TestCall ct={types.find((t) => t.key === testing)!} status={status} onClose={() => setTesting(null)} onPlaced={(c) => { setCalls((cs) => [c, ...cs.filter((x) => x.id !== c.id)]); setTesting(null); }} />}
       {detail && <CallDetail id={detail} onClose={() => setDetail(null)} />}
     </div>
   );

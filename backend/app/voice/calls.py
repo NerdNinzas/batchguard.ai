@@ -49,6 +49,27 @@ def template_variables(definition: dict[str, Any]) -> list[dict[str, str]]:
     return [{"name": k, "default": v} for k, v in seen.items()]
 
 
+SCENARIOS: list[dict[str, Any]] = json.loads((Path(__file__).resolve().parent / "scenarios.json").read_text())
+# emergency calls also need the escalation story; follow-ups reuse the same machine conditions
+_SCENARIO_EXTRA = {"emergency_escalation": {"previous_contact": "Maintenance lead", "escalation_minutes": "2", "open_minutes": "6"}}
+
+
+def scenarios_for(key: str) -> list[dict[str, Any]]:
+    """Condition presets a test call can be placed with (by the call type's severity)."""
+    sev = set(CALL_TYPES.get(key, {}).get("severity") or [])
+    if key == "test_call":
+        return []
+    want = {"critical"} if sev & {"critical", "emergency"} else {"warning"} if sev & {"warning"} else {"critical", "warning"}
+    out = []
+    for sc in SCENARIOS:
+        if sc["severity"] in want:
+            ctx = {**sc["context"], **_SCENARIO_EXTRA.get(key, {})}
+            if key == "emergency_escalation":
+                ctx["severity"] = "emergency"
+            out.append({"key": sc["key"], "label": sc["label"], "severity": ctx["severity"], "context": ctx})
+    return out
+
+
 CALL_TYPES = load_call_types()
 ORDER = ["critical_alert", "emergency_escalation", "warning_notice", "resolution_followup", "test_call"]
 
@@ -136,8 +157,8 @@ def _first_sentence(s: str, limit: int = 240) -> str:
 
 
 def build_context(org: dict[str, Any], key: str, contact: dict[str, Any] | None, incident: dict[str, Any] | None,
-                  machine: dict[str, Any] | None, st: dict[str, Any], overrides: dict[str, Any] | None = None) -> dict[str, str]:
-    """Template variables for the call, from the incident's investigation report when it exists."""
+                  machine: dict[str, Any] | None, st: dict[str, Any], overrides: dict[str, Any] | None = None, scenario: str | None = None) -> dict[str, str]:
+    """Template variables for the call, from the incident's investigation report when it exists (or a test scenario)."""
     ctx: dict[str, Any] = {
         "org_name": org.get("name") or "the factory",
         "contact_name": (contact or {}).get("name") or "the on-call contact",
@@ -173,6 +194,10 @@ def build_context(org: dict[str, Any], key: str, contact: dict[str, Any] | None,
         else:
             ctx["likely_cause"] = "still being investigated — Muse is gathering evidence"
             ctx["first_check"] = "open the incident on the dashboard; the checklist appears as soon as the investigation finishes"
+    if scenario:
+        sc = next((x for x in scenarios_for(key) if x["key"] == scenario), None)
+        if sc:
+            ctx.update(sc["context"])
     for k, v in (overrides or {}).items():
         if v not in (None, ""):
             ctx[k] = v
@@ -188,7 +213,7 @@ def _normalise_phone(p: str) -> str:
 
 
 def place_call(org: dict[str, Any], key: str, to_number: str, *, contact: dict[str, Any] | None = None, incident: dict[str, Any] | None = None,
-               overrides: dict[str, Any] | None = None, placed_by: str = "system", draft: bool = False) -> dict[str, Any]:
+               overrides: dict[str, Any] | None = None, placed_by: str = "system", draft: bool = False, scenario: str | None = None) -> dict[str, Any]:
     if key not in CALL_TYPES:
         raise ValueError(f"unknown call type {key}")
     phone = _normalise_phone(to_number)
@@ -196,7 +221,7 @@ def place_call(org: dict[str, Any], key: str, to_number: str, *, contact: dict[s
         raise ValueError("A phone number in international format is required, e.g. +91 98765 43210")
     st = get_settings(org["id"])
     machine = row(conn().execute("SELECT * FROM machines WHERE id=?", (incident["machine_id"],)).fetchone()) if incident else None
-    ctx = build_context(org, key, contact, incident, machine, st, overrides)
+    ctx = build_context(org, key, contact, incident, machine, st, overrides, scenario=scenario)
     call = {
         "id": new_id("call"), "org_id": org["id"], "incident_id": (incident or {}).get("id"), "contact_id": (contact or {}).get("id"),
         "contact_name": (contact or {}).get("name"), "call_type": key, "to_number": phone, "from_number": st.get("from_number"),
