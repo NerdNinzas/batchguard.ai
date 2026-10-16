@@ -50,6 +50,7 @@ CREATE TABLE IF NOT EXISTS readings (
   value REAL NOT NULL, unit TEXT, ts REAL NOT NULL, received_at REAL NOT NULL, reading_id TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_readings_mpt ON readings(machine_id, parameter, ts);
+CREATE INDEX IF NOT EXISTS idx_readings_received ON readings(received_at);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_readings_rid ON readings(machine_id, reading_id) WHERE reading_id IS NOT NULL;
 CREATE TABLE IF NOT EXISTS latest (
   machine_id TEXT NOT NULL, parameter TEXT NOT NULL, value REAL NOT NULL, unit TEXT, ts REAL NOT NULL,

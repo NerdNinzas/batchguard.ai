@@ -131,7 +131,7 @@ def overview(org: dict[str, Any] = Depends(current_org)) -> dict[str, Any]:
                    "readings_per_min": rate, "mean_ack_seconds": round(sum(ack_times) / len(ack_times)) if ack_times else None},
         "open_incidents": [{**i, "signals": uj(i["signals"], []), "report": None} for i in open_inc[:10]],
         "incidents_per_hour": list(reversed(buckets)),
-        "gemini_enabled": settings.gemini_enabled, "smtp_enabled": settings.smtp_enabled,
+        "gemini_enabled": settings.gemini_enabled, "smtp_enabled": settings.email_enabled,
     }
 
 
@@ -165,7 +165,7 @@ def observability(org: dict[str, Any] = Depends(current_org)) -> dict[str, Any]:
         "agent_runs": runs,
         "stale_machines": stale,
         "db_rows": {t_: conn().execute(f"SELECT COUNT(*) n FROM {t_}").fetchone()["n"] for t_ in ("readings", "events", "incidents", "notifications")},
-        "config": {"gemini": settings.gemini_enabled, "smtp": settings.smtp_enabled, "stale_after_s": settings.stale_after_seconds, "cooldown_s": settings.incident_cooldown_seconds, "escalation_timeout_s": settings.escalation_timeout_seconds},
+        "config": {"gemini": settings.gemini_enabled, "smtp": settings.email_enabled, "stale_after_s": settings.stale_after_seconds, "cooldown_s": settings.incident_cooldown_seconds, "escalation_timeout_s": settings.escalation_timeout_seconds},
         "recent_logs": api[:60],
     }
 
