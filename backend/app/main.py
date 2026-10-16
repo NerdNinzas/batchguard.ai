@@ -11,7 +11,7 @@ from fastapi.responses import JSONResponse
 from . import bus, cloud, demo, incidents
 from .config import settings
 from .db import conn, init_db, tx
-from .routers import auth, device, incidents as incidents_router, machines, misc, orgs, voice
+from .routers import auth, device, incidents as incidents_router, machines, misc, orgs, voice, work_orders
 from .voice import calls as voice_calls
 
 
@@ -68,7 +68,7 @@ async def api_log(request: Request, call_next):
     return response
 
 
-for r in (auth.router, orgs.router, machines.router, device.router, incidents_router.router, misc.router, voice.router):
+for r in (auth.router, orgs.router, machines.router, device.router, incidents_router.router, incidents_router.evidence_router, misc.router, voice.router, work_orders.router):
     app.include_router(r)
 
 

@@ -180,6 +180,30 @@ def upload_manual(local_path: str, data: bytes, content_type: str) -> str | None
 
 
 # ---------- Cloud Logging ----------
+def upload_blob(name: str, data: bytes, content_type: str) -> str | None:
+    """Store bytes in the project bucket (evidence photos etc.). Returns the gs:// uri or None when GCS is off."""
+    if not enabled() or not settings.gcs_bucket:
+        return None
+    try:
+        st = _client("storage")
+        st.bucket(settings.gcs_bucket).blob(name).upload_from_string(data, content_type=content_type)
+        return f"gs://{settings.gcs_bucket}/{name}"
+    except Exception as e:  # noqa: BLE001
+        print("gcs upload failed:", e)
+        return None
+
+
+def download_blob(gcs_uri: str) -> bytes | None:
+    if not enabled() or not gcs_uri.startswith("gs://"):
+        return None
+    try:
+        bucket, _, name = gcs_uri[5:].partition("/")
+        return _client("storage").bucket(bucket).blob(name).download_as_bytes()
+    except Exception as e:  # noqa: BLE001
+        print("gcs download failed:", e)
+        return None
+
+
 def setup_logging() -> bool:
     if not enabled() or not settings.cloud_logging:
         return False

@@ -4,9 +4,13 @@ from typing import Any
 
 from . import bus, cloud
 from .db import conn, tx
-from .detection import Signal, limit_state, run_detection
+from .db import j
+from .detection import Signal, forecast, limit_state, run_detection
 from .ids import now
 from .incidents import handle_signals, resume_from_stale
+
+_forecast_at: dict[tuple[str, str], float] = {}
+FORECAST_EVERY = 5.0  # s per (machine, parameter)
 
 
 def ingest_readings(m: dict[str, Any], readings: list[dict[str, Any]]) -> dict[str, Any]:
@@ -45,6 +49,15 @@ def ingest_readings(m: dict[str, Any], readings: list[dict[str, Any]]) -> dict[s
     for r in readings:
         if r["parameter"] in latest_payload:
             signals += run_detection(m["id"], r["parameter"], r["value"], r.get("unit"), t)
+    # predicted time-to-limit, refreshed every few seconds per parameter and carried on the live event
+    for name in list(latest_payload):
+        key = (m["id"], name)
+        if t - _forecast_at.get(key, 0) >= FORECAST_EVERY:
+            _forecast_at[key] = t
+            fc = forecast(m["id"], known[name], t)
+            latest_payload[name]["forecast"] = fc
+            with tx() as c:
+                c.execute("UPDATE latest SET forecast=? WHERE machine_id=? AND parameter=?", (j(fc) if fc else None, m["id"], name))
     bus.publish(m["org_id"], "telemetry", {"machine_id": m["id"], "device_id": m["device_id"], "latest": latest_payload, "ts": t})
     cloud.mirror_latest(m["id"], m["org_id"], latest_payload)
     cloud.publish_readings(m, [{**r, "state": latest_payload[r["parameter"]]["state"]} for r in readings if r["parameter"] in latest_payload], t)

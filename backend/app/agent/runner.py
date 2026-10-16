@@ -56,7 +56,11 @@ def investigate_async(incident_id: str) -> None:
         try:
             from . import adk_agent
 
-            report, calls = adk_agent.investigate(inc["machine_id"], signals, inc["severity"])
+            from . import evidence as evidence_mod
+
+            photo_lines = evidence_mod.context_lines(incident_id)
+            agent_signals = signals + [{"layer": "photo", "parameter": "photo", "severity": inc["severity"], "message": ln, "value": None} for ln in photo_lines]
+            report, calls = adk_agent.investigate(inc["machine_id"], agent_signals, inc["severity"])
             source = "gemini-adk"
         except Exception as e:  # noqa: BLE001
             err = f"{e}\n{traceback.format_exc()[-800:]}"
@@ -93,7 +97,10 @@ def ask(incident_id: str, question: str) -> str:
     if not inc:
         return "Unknown incident."
     report = uj(inc["report"], {})
-    context = json.dumps({"title": inc["title"], "severity": inc["severity"], "signals": uj(inc["signals"], []), "report": report}, default=str)[:12000]
+    from . import evidence as evidence_mod
+
+    context = json.dumps({"title": inc["title"], "severity": inc["severity"], "signals": uj(inc["signals"], []), "report": report,
+                          "photo_evidence": evidence_mod.context_lines(incident_id)}, default=str)[:12000]
     if settings.gemini_enabled:
         try:
             from . import adk_agent

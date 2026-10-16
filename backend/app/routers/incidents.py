@@ -1,10 +1,11 @@
 import threading
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi.responses import Response
 from pydantic import BaseModel
 
-from ..agent import runner
+from ..agent import evidence, runner
 from ..auth import current_org, current_user
 from ..db import conn, row, rows, uj
 from ..incidents import acknowledge, resolve
@@ -48,6 +49,8 @@ def get_incident(iid: str, org: dict[str, Any] = Depends(current_org)) -> dict[s
     out["runs"] = [{**r, "tool_calls": uj(r["tool_calls"], [])} for r in rows(conn().execute("SELECT * FROM agent_runs WHERE incident_id=? ORDER BY started_at DESC", (iid,)).fetchall())]
     out["chat"] = rows(conn().execute("SELECT * FROM chat WHERE incident_id=? ORDER BY ts", (iid,)).fetchall())
     out["notifications"] = rows(conn().execute("SELECT * FROM notifications WHERE incident_id=? ORDER BY sent_at", (iid,)).fetchall())
+    out["evidence"] = evidence.list_for_incident(iid)
+    out["work_orders"] = rows(conn().execute("SELECT * FROM work_orders WHERE incident_id=? ORDER BY created_at", (iid,)).fetchall())
     return out
 
 
@@ -74,3 +77,37 @@ def reinvestigate(iid: str, org: dict[str, Any] = Depends(current_org)) -> dict[
 def ask(iid: str, body: AskIn, org: dict[str, Any] = Depends(current_org)) -> dict[str, str]:
     _get(org["id"], iid)
     return {"answer": runner.ask(iid, body.question.strip())}
+
+
+# ---------- photo evidence ----------
+@router.get("/{iid}/evidence")
+def list_evidence(iid: str, org: dict[str, Any] = Depends(current_org)) -> list[dict[str, Any]]:
+    _get(org["id"], iid)
+    return evidence.list_for_incident(iid)
+
+
+@router.post("/{iid}/evidence")
+async def add_evidence(iid: str, file: UploadFile = File(...), caption: str = Form(default=""), org: dict[str, Any] = Depends(current_org),
+                       user: dict[str, Any] = Depends(current_user)) -> dict[str, Any]:
+    inc = _get(org["id"], iid)
+    mime = file.content_type or "image/jpeg"
+    if not mime.startswith("image/"):
+        raise HTTPException(400, "Upload an image (JPEG, PNG, WebP, HEIC)")
+    data = await file.read()
+    if len(data) > 12 * 1024 * 1024:
+        raise HTTPException(413, "Image larger than 12 MB")
+    return await __import__("asyncio").to_thread(evidence.add_photo, inc, data, file.filename or "photo.jpg", mime, caption[:300], user.get("email") or "user")
+
+
+evidence_router = APIRouter(prefix="/api/evidence", tags=["incidents"])
+
+
+@evidence_router.get("/{eid}/file")
+def evidence_file(eid: str, org: dict[str, Any] = Depends(current_org)) -> Response:
+    ev = row(conn().execute("SELECT * FROM evidence WHERE id=? AND org_id=?", (eid, org["id"])).fetchone())
+    if not ev:
+        raise HTTPException(404, "Not found")
+    data = evidence.file_bytes(ev)
+    if data is None:
+        raise HTTPException(404, "File missing")
+    return Response(content=data, media_type=ev.get("mime") or "image/jpeg", headers={"Cache-Control": "private, max-age=3600"})

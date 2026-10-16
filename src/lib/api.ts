@@ -45,7 +45,24 @@ export type Org = { id: string; name: string; owner_name: string; owner_email: s
 export type Contact = { id: string; name: string; role: string; phone: string; email: string; escalation_order: number; quiet_start?: string | null; quiet_end?: string | null };
 export type Parameter = { id?: string; name: string; unit?: string | null; normal_min?: number | null; normal_max?: number | null; warn_low?: number | null; warn_high?: number | null; crit_low?: number | null; crit_high?: number | null; sample_rate?: number | null; source_page?: number | null; source_snippet?: string | null; confidence?: number | null; verified: boolean | number };
 export type Knowledge = { title: string; page?: number | null; kind: string; text: string };
-export type Latest = Record<string, { value: number; unit?: string | null; ts: number; state: "normal" | "warning" | "critical" }>;
+export type Forecast = { direction: "rising" | "falling"; slope_per_min: number; r2: number; warn_limit: number | null; crit_limit: number | null; eta_warn_seconds: number | null; eta_crit_seconds: number | null; computed_at: number };
+export type Latest = Record<string, { value: number; unit?: string | null; ts: number; state: "normal" | "warning" | "critical"; forecast?: Forecast | null }>;
+export type WorkOrder = { id: string; org_id: string; machine_id: string; incident_id: string | null; title: string; description: string; status: "open" | "in_progress" | "done"; priority: "low" | "medium" | "high" | "urgent"; assignee: string | null; due_at: number | null; source: string; position: number; created_by: string | null; created_at: number; updated_at: number; done_at: number | null; machine?: { name: string; device_id: string } };
+export type EvidenceItem = { id: string; incident_id: string; machine_id: string; kind: string; filename: string | null; url: string; mime: string | null; caption: string | null; uploaded_by: string | null; ts: number; analysis: { description?: string; observations?: string[]; findings?: { cause: string; supports: boolean; rationale: string }[]; safety_flags?: string[]; confidence?: string; relevant?: boolean; model?: string | null; error?: string } };
+/** The most urgent projected limit crossing across a machine's parameters (for cards). */
+export function worstForecast(latest: Latest | undefined): { parameter: string; seconds: number; level: "warning" | "critical"; f: Forecast } | null {
+  let best: { parameter: string; seconds: number; level: "warning" | "critical"; f: Forecast } | null = null;
+  for (const [parameter, l] of Object.entries(latest ?? {})) {
+    const f = l.forecast;
+    if (!f) continue;
+    const cands: { seconds: number; level: "warning" | "critical" }[] = [];
+    if (f.eta_crit_seconds != null && f.eta_crit_seconds > 0) cands.push({ seconds: f.eta_crit_seconds, level: "critical" });
+    if (f.eta_warn_seconds != null && f.eta_warn_seconds > 0 && l.state === "normal") cands.push({ seconds: f.eta_warn_seconds, level: "warning" });
+    for (const c of cands) if (!best || c.seconds < best.seconds) best = { parameter, ...c, f };
+  }
+  return best;
+}
+export const fmtEta = (s: number) => (s < 60 ? `${Math.round(s)} s` : s < 3600 ? `${Math.round(s / 60)} min` : `${(s / 3600).toFixed(1)} h`);
 export type Machine = {
   id: string; org_id: string; line_id: string | null; name: string; type: string; location: string; status: string; device_id: string;
   api_key_prefix?: string | null; manual_name?: string | null; knowledge: Knowledge[]; source: string; verified: number; verified_at?: number | null;
@@ -55,7 +72,7 @@ export type Machine = {
 export type Signal = { parameter: string; layer: string; severity: string; value: number | null; message: string; ts: number; [k: string]: unknown };
 export type Evidence = { observation: string; supports: boolean; parameter?: string | null; value?: number | null; source: string };
 export type Cause = { name: string; support: string; rationale: string; evidence_for: Evidence[]; evidence_against: Evidence[]; missing_data: string[] };
-export type Report = { summary: string; severity: string; timeline: { t: string; what: string }[]; causes: Cause[]; checks: { order: number; action: string; discriminates: string; safety: string }[]; missing_data: string[]; call_script: string; cross_machine?: string | null; guardrail?: { unverified_numbers_removed: string[]; schema: string } };
+export type Report = { summary: string; severity: string; timeline: { t: string; what: string }[]; causes: Cause[]; checks: { order: number; action: string; discriminates: string; safety: string }[]; missing_data: string[]; call_script: string; cross_machine?: string | null; guardrail?: { unverified_numbers_removed: string[]; schema: string }; photo_evidence?: { id: string; caption?: string | null; description?: string; confidence?: string; safety_flags?: string[] }[] };
 export type Incident = {
   id: string; org_id: string; machine_id: string; severity: string; status: string; title: string; opened_at: number; acknowledged_at?: number | null;
   acknowledged_by?: string | null; resolved_at?: number | null; signals: Signal[]; report: Report | null; report_source?: string | null;
@@ -63,6 +80,8 @@ export type Incident = {
   runs?: { id: string; source: string; ok: number; error?: string | null; started_at: number; finished_at?: number | null; tool_calls: { tool: string; stage?: string; args: Record<string, unknown> }[] }[];
   chat?: { id: string; role: string; text: string; ts: number }[];
   notifications?: Notification[];
+  evidence?: EvidenceItem[];
+  work_orders?: WorkOrder[];
 };
 /* ---------- voice AI (Dograh · Gemini Live realtime · TeleCMI) ---------- */
 export type VoiceNumber = { id: number; config_id: number; config_name: string; provider: string; number: string; label: string | null; country: string | null; active: boolean; default_caller: boolean; telecmi: boolean };
@@ -92,7 +111,7 @@ export type VoiceCall = {
 export type Notification = { id: string; incident_id?: string | null; channel: string; contact_id?: string | null; to_addr?: string | null; subject: string; body: string; status: string; sent_at: number; read: number };
 
 /* ---------- live stream ---------- */
-export type LiveEvent = { type: "telemetry" | "incident" | "machine" | "event" | "notification" | "voice_call"; data: Record<string, unknown> & { [k: string]: unknown } };
+export type LiveEvent = { type: "telemetry" | "incident" | "machine" | "event" | "notification" | "voice_call" | "work_order"; data: Record<string, unknown> & { [k: string]: unknown } };
 
 /** Subscribe to the org's SSE stream. `onEvent` is called for every message; returns connection state. */
 export function useLive(onEvent: (e: LiveEvent) => void, enabled = true) {

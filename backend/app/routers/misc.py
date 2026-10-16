@@ -109,7 +109,7 @@ def overview(org: dict[str, Any] = Depends(current_org)) -> dict[str, Any]:
         if not p:
             continue
         pts = [r["value"] for r in conn().execute("SELECT value FROM readings WHERE machine_id=? AND parameter=? ORDER BY ts DESC LIMIT 40", (m["id"], p["name"])).fetchall()][::-1]
-        latest = {r["parameter"]: {"value": r["value"], "unit": r["unit"], "state": r["state"]} for r in conn().execute("SELECT * FROM latest WHERE machine_id=?", (m["id"],)).fetchall()}
+        latest = {r["parameter"]: {"value": r["value"], "unit": r["unit"], "state": r["state"], "forecast": uj(r["forecast"], None)} for r in conn().execute("SELECT * FROM latest WHERE machine_id=?", (m["id"],)).fetchall()}
         sparks[m["id"]] = {"parameter": p["name"], "unit": p["unit"], "points": pts, "latest": latest}
     ingest = [0] * 30
     for r in conn().execute("SELECT received_at FROM readings WHERE received_at>=? AND machine_id IN (SELECT id FROM machines WHERE org_id=?)", (t - 1800, org["id"])).fetchall():

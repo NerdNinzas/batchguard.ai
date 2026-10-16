@@ -118,6 +118,45 @@ def check_trend(machine_id: str, p: dict[str, Any], now: float) -> Signal | None
     )
 
 
+FORECAST_WINDOW = 300  # s of history the projection is fitted on
+
+
+def forecast(machine_id: str, p: dict[str, Any], now: float) -> dict[str, Any] | None:
+    """Predicted time-to-limit for the dashboard: linear fit over the last 5 min, projected to the warning and
+    critical limits in the direction of travel. Looser than `check_trend` (which opens incidents): R² ≥ 0.5,
+    horizon up to 24 h. Returns None when the parameter is flat or moving away from its limits."""
+    ts, vs = _series(machine_id, p["name"], now - FORECAST_WINDOW)
+    if len(ts) < 20 or (ts[-1] - ts[0]) < 60:
+        return None
+    x = ts - ts[0]
+    slope, intercept = np.polyfit(x, vs, 1)
+    resid = vs - (slope * x + intercept)
+    ss_res, ss_tot = float((resid**2).sum()), float(((vs - vs.mean()) ** 2).sum())
+    r2 = 1 - ss_res / ss_tot if ss_tot > 0 else 0.0
+    noise = float(resid.std() or 1e-9)
+    if abs(slope) < 1e-9 or r2 < 0.5 or abs(slope) * (x[-1] - x[0]) < 2 * noise:
+        return None
+    current = float(slope * x[-1] + intercept)
+    up = slope > 0
+    warn, crit = (p.get("warn_high"), p.get("crit_high")) if up else (p.get("warn_low"), p.get("crit_low"))
+
+    def eta(target: float | None) -> int | None:
+        if target is None:
+            return None
+        if (up and current >= target) or (not up and current <= target):
+            return 0
+        t = (target - current) / slope
+        return int(t) if 0 < t <= 86400 else None
+
+    eta_w, eta_c = eta(warn), eta(crit)
+    if eta_w is None and eta_c is None:
+        return None
+    return {
+        "direction": "rising" if up else "falling", "slope_per_min": round(float(slope) * 60, 4), "r2": round(r2, 2),
+        "warn_limit": warn, "crit_limit": crit, "eta_warn_seconds": eta_w, "eta_crit_seconds": eta_c, "computed_at": round(now, 1),
+    }
+
+
 def baseline(machine_id: str, parameter: str, now: float) -> dict[str, float] | None:
     """Mean/std over the 2 min before the last 60 s (so a fresh fault doesn't pollute its own baseline)."""
     ts, vs = _series(machine_id, parameter, now - 180)

@@ -1,13 +1,15 @@
 "use client";
 
-import { Check, MessageSquare, Phone, RefreshCw, Send, ShieldAlert, ThumbsDown, ThumbsUp, X } from "lucide-react";
+import { Camera, Check, ClipboardList, MessageSquare, Phone, RefreshCw, Send, ShieldAlert, ThumbsDown, ThumbsUp, Wand2, X } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
+import { PhotoEvidence } from "@/components/app/PhotoEvidence";
 import { useApp } from "@/components/app/Shell";
+import { WorkOrdersBoard } from "@/components/app/WorkOrders";
 import { Badge, Button, Card, Input, Modal, Select, Spinner, statusTone } from "@/components/ui/Primitives";
 import { useToast } from "@/components/ui/Toast";
-import { fmtAgo, fmtTime, get, post, type Cause, type Incident, type VoiceCall } from "@/lib/api";
+import { fmtAgo, fmtTime, get, post, type Cause, type Contact, type Incident, type VoiceCall, type WorkOrder } from "@/lib/api";
 
 const SUPPORT: Record<string, string> = { strong: "green", plausible: "blue", weak: "amber", inconclusive: "muted" };
 
@@ -21,6 +23,15 @@ export default function IncidentPage() {
   const [resolveOpen, setResolveOpen] = useState(false);
   const [fb, setFb] = useState({ verdict: "correct", actual_cause: "", fix: "" });
   const [calling, setCalling] = useState(false);
+  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [makingWo, setMakingWo] = useState(false);
+  useEffect(() => { get<Contact[]>("/api/contacts").then(setContacts).catch(() => setContacts([])); }, []);
+  async function workOrdersFromChecks() {
+    setMakingWo(true);
+    try { const made = await post<WorkOrder[]>(`/api/work-orders/from-incident/${id}`); toast("success", made.length ? `${made.length} work order${made.length > 1 ? "s" : ""} created` : "All checks already have work orders"); load(); }
+    catch (e) { toast("error", "Could not create work orders", e instanceof Error ? e.message : String(e)); }
+    finally { setMakingWo(false); }
+  }
 
   const load = useCallback(() => get<Incident>(`/api/incidents/${id}`).then(setInc), [id]);
   useEffect(() => { load(); }, [load]);
@@ -93,6 +104,15 @@ export default function IncidentPage() {
                 {r.guardrail && <p className="text-[11px] text-muted">Guardrail: schema {r.guardrail.schema} · {r.guardrail.unverified_numbers_removed.length} unverified number(s) removed{r.guardrail.unverified_numbers_removed.length ? ` (${r.guardrail.unverified_numbers_removed.join(", ")})` : ""}.</p>}
               </div>
             )}
+          </Card>
+
+          <Card title={<span className="flex items-center gap-2"><Camera size={18} className="text-blue" /> Photo evidence</span>} action={<span className="text-xs text-muted">{(inc.evidence ?? []).length} photo{(inc.evidence ?? []).length === 1 ? "" : "s"} · Gemini vision</span>}>
+            <PhotoEvidence incidentId={id} items={inc.evidence ?? []} onChanged={load} />
+            {(inc.evidence ?? []).length > 0 && <div className="mt-3 flex items-center gap-2"><Button size="sm" variant="secondary" onClick={reinvestigate}><Wand2 size={14} /> Re-investigate with the photos</Button><span className="text-[11px] text-muted">Muse re-runs the pipeline with the photo findings as extra signals.</span></div>}
+          </Card>
+
+          <Card title={<span className="flex items-center gap-2"><ClipboardList size={18} className="text-blue" /> Work orders</span>} action={r && r.checks.length > 0 ? <Button size="sm" variant="secondary" onClick={workOrdersFromChecks} loading={makingWo}><Wand2 size={14} /> From Muse&apos;s checks</Button> : undefined}>
+            <WorkOrdersBoard machineId={inc.machine_id} incidentId={id} contacts={contacts} compact />
           </Card>
 
           <Card title={<span className="flex items-center gap-2"><MessageSquare size={18} className="text-blue" /> Ask Muse about this incident</span>}>

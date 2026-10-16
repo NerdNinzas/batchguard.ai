@@ -6,8 +6,9 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useApp } from "@/components/app/Shell";
 import { HealthRing } from "@/components/app/charts";
+import { TrendingDown, TrendingUp } from "lucide-react";
 import { Badge, Button, Empty, Spinner, StatusDot, statusTone } from "@/components/ui/Primitives";
-import { fmtAgo, get, type Machine } from "@/lib/api";
+import { fmtAgo, get, type Machine, fmtEta, worstForecast } from "@/lib/api";
 import { machineType } from "@/lib/machineTypes";
 
 export default function MachinesPage() {
@@ -52,6 +53,12 @@ export default function MachinesPage() {
               </div>
             </div>
             <div className="p-4">
+            {(() => { const wf = worstForecast(m.latest); return wf ? (
+              <div className={`-mt-1 mb-2 flex items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-[11px] ${wf.level === "critical" ? "bg-red/10 text-red" : "bg-amber/10 text-amber"}`}>
+                {wf.f.direction === "rising" ? <TrendingUp size={13} /> : <TrendingDown size={13} />}
+                <span><span className="font-mono">{wf.parameter}</span> reaches the {wf.level} limit in <strong>{fmtEta(wf.seconds)}</strong> at {Math.abs(wf.f.slope_per_min).toFixed(2)}/min</span>
+              </div>
+            ) : null; })()}
             <div className="mt-3 flex flex-wrap gap-1.5">
               <Badge tone={statusTone(m.status)}>{m.status}</Badge>
               <Badge tone={m.verified ? "green" : "amber"}>{m.verified ? "verified" : "unverified"}</Badge>

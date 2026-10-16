@@ -98,6 +98,17 @@ CREATE TABLE IF NOT EXISTS voice_calls (
   created_at REAL NOT NULL, updated_at REAL NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_voice_calls_org ON voice_calls(org_id, created_at);
+CREATE TABLE IF NOT EXISTS evidence (
+  id TEXT PRIMARY KEY, org_id TEXT NOT NULL, incident_id TEXT NOT NULL, machine_id TEXT NOT NULL, kind TEXT NOT NULL DEFAULT 'photo',
+  filename TEXT, path TEXT, gcs_uri TEXT, mime TEXT, caption TEXT, analysis TEXT, uploaded_by TEXT, ts REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_evidence_incident ON evidence(incident_id, ts);
+CREATE TABLE IF NOT EXISTS work_orders (
+  id TEXT PRIMARY KEY, org_id TEXT NOT NULL, machine_id TEXT NOT NULL, incident_id TEXT, title TEXT NOT NULL, description TEXT,
+  status TEXT NOT NULL DEFAULT 'open', priority TEXT NOT NULL DEFAULT 'medium', assignee TEXT, due_at REAL, source TEXT NOT NULL DEFAULT 'manual',
+  position INTEGER NOT NULL DEFAULT 0, created_by TEXT, created_at REAL NOT NULL, updated_at REAL NOT NULL, done_at REAL
+);
+CREATE INDEX IF NOT EXISTS idx_work_orders_machine ON work_orders(machine_id, status);
 """
 
 
@@ -117,6 +128,10 @@ _local = threading.local()
 def init_db() -> None:
     c = conn()
     c.executescript(SCHEMA)
+    # additive migrations for databases created before these columns existed
+    cols = {r["name"] for r in c.execute("PRAGMA table_info(latest)").fetchall()}
+    if "forecast" not in cols:
+        c.execute("ALTER TABLE latest ADD COLUMN forecast TEXT")
     c.commit()
 
 

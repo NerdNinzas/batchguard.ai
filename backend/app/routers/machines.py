@@ -60,7 +60,7 @@ class VerifyIn(BaseModel):
 
 def _machine_out(m: dict[str, Any]) -> dict[str, Any]:
     params = rows(conn().execute("SELECT * FROM parameters WHERE machine_id=? ORDER BY name", (m["id"],)).fetchall())
-    latest = {r["parameter"]: {"value": r["value"], "unit": r["unit"], "ts": r["ts"], "state": r["state"]} for r in conn().execute("SELECT * FROM latest WHERE machine_id=?", (m["id"],)).fetchall()}
+    latest = {r["parameter"]: {"value": r["value"], "unit": r["unit"], "ts": r["ts"], "state": r["state"], "forecast": uj(r["forecast"], None) if "forecast" in r.keys() else None} for r in conn().execute("SELECT * FROM latest WHERE machine_id=?", (m["id"],)).fetchall()}
     out = {k: v for k, v in m.items() if k not in ("api_key_hash", "manual_text")}
     out["knowledge"] = uj(m.get("knowledge"), [])
     out["parameters"] = params
