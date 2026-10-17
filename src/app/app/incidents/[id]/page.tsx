@@ -75,7 +75,7 @@ export default function IncidentPage() {
       <div data-hl={id} className={`card rounded-2xl p-5 ${hl.className}`}>
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <div className="flex flex-wrap items-center gap-2"><Badge tone={statusTone(inc.severity)}>{inc.severity}</Badge><Badge tone={statusTone(inc.status)}>{inc.status === "resolved" && inc.resolved_reason === "back to normal" ? "resolved · back to normal" : inc.status}</Badge>{inc.escalation_level > 0 && <Badge tone="red">escalation level {inc.escalation_level}</Badge>}<Badge tone="muted">{inc.id}</Badge></div>
+            <div className="flex flex-wrap items-center gap-2"><Badge tone={statusTone(inc.severity)}>{inc.severity}</Badge><Badge tone={statusTone(inc.status)}>{inc.status === "resolved" && inc.resolved_reason === "back to normal" ? "resolved · back to normal" : inc.resolved_reason === "back online" ? "resolved · back online" : inc.status}</Badge>{inc.escalation_level > 0 && <Badge tone="red">escalation level {inc.escalation_level}</Badge>}<Badge tone="muted">{inc.id}</Badge></div>
             <h2 className="font-display mt-2 text-3xl font-semibold text-ink">{inc.title}</h2>
             <p className="text-sm text-muted">Opened {fmtAgo(inc.opened_at)} ({fmtTime(inc.opened_at)}) · <Link href={`/app/machines/${inc.machine_id}`} className="text-blue hover:underline">{inc.machine?.name}</Link> · {inc.machine?.device_id}{inc.acknowledged_by ? ` · acknowledged by ${inc.acknowledged_by}` : ""}</p>
           </div>

@@ -23,7 +23,7 @@ type Overview = {
   agent_runs: { source: string; ok: number; started_at: number; finished_at?: number | null; title: string }[];
   contacts: number;
   org: { name: string; industry?: string | null; timezone?: string | null };
-  counts: { machines: number; online: number; open_incidents: number; critical: number; readings_per_min: number; mean_ack_seconds: number | null; resolved_24h: number };
+  counts: { machines: number; online: number; open_incidents: number; critical: number; attention: { id: string; name: string; status: string }[]; readings_per_min: number; mean_ack_seconds: number | null; resolved_24h: number };
   incidents_per_hour: number[];
   gemini_enabled: boolean;
 };
@@ -46,7 +46,7 @@ export default function OverviewPage() {
       .catch(() => {});
   useEffect(() => {
     load();
-    const id = setInterval(load, 20000);
+    const id = setInterval(load, 15000);
     return () => clearInterval(id);
   }, []);
   useEffect(
@@ -69,7 +69,12 @@ export default function OverviewPage() {
   if (!d) return <PageSkeleton variant="overview" />;
   const c = d.counts;
   const healthy = c.critical === 0 && c.open_incidents === 0;
-  const headline = c.critical ? `${c.critical} machine${c.critical > 1 ? "s" : ""} need${c.critical > 1 ? "" : "s"} attention` : c.open_incidents ? `${c.open_incidents} open warning${c.open_incidents > 1 ? "s" : ""}` : "All machines running normally";
+  const att = c.attention ?? [];
+  const down = att.filter((m) => m.status === "stale" || m.status === "offline");
+  const headline = att.length === 0 ? "All machines running normally"
+    : att.length === 1 ? `${att[0].name} ${att[0].status === "stale" || att[0].status === "offline" ? "is down" : "needs attention"}`
+    : att.length <= 3 ? `${att.map((m) => m.name).slice(0, -1).join(", ")} and ${att[att.length - 1].name} need attention`
+    : down.length === att.length ? `${att.length} machines are down` : `${att.length} machines need attention`;
   const hour = new Date().getHours();
   const greet = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
   const firstName = user.name.split(" ")[0];

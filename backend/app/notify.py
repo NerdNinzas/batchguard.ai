@@ -41,8 +41,16 @@ def send_email(to_addr: str, subject: str, html_body: str) -> str:
     return mail.send(to_addr, subject, html_body)
 
 
+def _is_stale(inc: dict[str, Any]) -> bool:
+    from .db import uj as _uj
+
+    sigs = _uj(inc.get("signals"), []) if isinstance(inc.get("signals"), str) else inc.get("signals") or []
+    return bool(sigs) and all(s.get("layer") == "stale" for s in sigs)
+
+
 def _incident_text(inc: dict[str, Any], m: dict[str, Any]) -> tuple[str, str]:
-    subject = f"[BatchGuard] {inc['severity'].upper()} — {m.get('name')} ({m.get('device_id')})"
+    subject = (f"[BatchGuard] {m.get('name')} is down — no telemetry ({m.get('device_id')})" if _is_stale(inc)
+               else f"[BatchGuard] {inc['severity'].upper()} — {m.get('name')} ({m.get('device_id')})")
     link = f"{settings.app_url}/app/incidents/{inc['id']}"
     body = (
         f"{inc['title']}\n\nSeverity: {inc['severity']}\nMachine: {m.get('name')} · {m.get('device_id')}\n"
@@ -118,8 +126,11 @@ def on_incident_resolved(inc: dict[str, Any], m: dict[str, Any], feedback: dict[
     contacts = _contacts(inc["org_id"])
     primary = contacts[0] if contacts else None
     auto = (feedback or {}).get("verdict") == "auto"
-    _record(inc["org_id"], inc["id"], "in_app", None, f"Back to normal: {m.get('name')}" if auto else f"Resolved: {inc['title']}",
-            f"{inc['title']} — parameters returned to normal; incident closed automatically" if auto else ((feedback or {}).get("actual_cause") or "closed"), "delivered")
+    back_online = auto and (feedback or {}).get("actual_cause") == "telemetry resumed"
+    subj = f"Back online: {m.get('name')}" if back_online else f"Back to normal: {m.get('name')}" if auto else f"Resolved: {inc['title']}"
+    body = (f"{m.get('name')} is sending telemetry again" if back_online else
+            f"{inc['title']} — parameters returned to normal; incident closed automatically" if auto else ((feedback or {}).get("actual_cause") or "closed"))
+    _record(inc["org_id"], inc["id"], "in_app", None, subj, body, "delivered")
     if primary and primary.get("email") and (feedback or {}).get("verdict") != "auto":
         subj, html_body = mail.incident_resolved(inc, m, feedback)
         _record(inc["org_id"], inc["id"], "email", primary, subj, "resolved", send_email(primary["email"], subj, html_body))

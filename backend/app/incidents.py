@@ -211,7 +211,7 @@ def resume_from_stale(machine_id: str) -> None:
     """Telemetry is back: a stale-only incident closes itself; anything else stays open."""
     inc = _open_incident_for(machine_id)
     if inc and all(sig.get("layer") == "stale" for sig in uj(inc["signals"], [])):
-        resolve(inc["id"], {"verdict": "auto", "actual_cause": "telemetry resumed", "fix": "auto-resolved"})
+        resolve(inc["id"], {"verdict": "auto", "actual_cause": "telemetry resumed", "fix": "auto-resolved"}, reason="back online")
 
 
 def staleness_sweep() -> None:
