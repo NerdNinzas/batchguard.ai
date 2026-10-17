@@ -7,11 +7,11 @@ import { useApp } from "@/components/app/Shell";
 import { useHighlight } from "@/components/muse/MuseLive";
 import { Badge, Button, Empty, statusTone } from "@/components/ui/Primitives";
 import { PageSkeleton } from "@/components/ui/Primitives";
-import { fmtAgo, get, type Incident } from "@/lib/api";
+import { cached, fmtAgo, get, type Incident } from "@/lib/api";
 
 export default function IncidentsPage() {
   const { subscribe } = useApp();
-  const [items, setItems] = useState<Incident[] | null>(null);
+  const [items, setItems] = useState<Incident[] | null>(() => cached<Incident[]>("/api/incidents?limit=200"));
   const [filter, setFilter] = useState<"all" | "open" | "acknowledged" | "resolved">("all");
   const load = () => get<Incident[]>("/api/incidents?limit=200").then(setItems);
   useEffect(() => { load(); }, []);

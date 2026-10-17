@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 
 /** JSON fetch against the Python backend (same-origin via Next rewrites, so cookies just work). */
+export const BACKEND_URL = (process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000").replace(/\/$/, "");
+
 export class ApiError extends Error {
   status: number;
   constructor(status: number, message: string) {
@@ -11,15 +13,40 @@ export class ApiError extends Error {
   }
 }
 
+const _cache = new Map<string, unknown>();
+/** Last known GET result for a path (so a page can render instantly while it refetches). */
+export function cached<T>(path: string): T | null { return (_cache.get(path) as T) ?? null; }
+export function invalidate(prefix = "") { for (const k of Array.from(_cache.keys())) if (k.startsWith(prefix)) _cache.delete(k); }
+
+let _direct: { token: string; exp: number } | null = null;
+async function directToken(): Promise<string | null> {
+  if (typeof window === "undefined") return null;
+  if (_direct && _direct.exp > Date.now() + 60_000) return _direct.token;
+  try {
+    const r = await fetch("/api/auth/token", { credentials: "include" });
+    if (!r.ok) return null;
+    const d = (await r.json()) as { token: string; expires_in: number };
+    _direct = { token: d.token, exp: Date.now() + d.expires_in * 1000 };
+    return d.token;
+  } catch { return null; }
+}
+
 export async function api<T = unknown>(path: string, init: RequestInit & { json?: unknown } = {}): Promise<T> {
   const { json, headers, ...rest } = init;
-  const res = await fetch(path, {
-    credentials: "include",
+  const method = (rest.method || "GET").toUpperCase();
+  // Auth endpoints and uploads keep using the cookie through the proxy; everything else talks to the backend origin
+  // directly with a bearer token, which removes two network hops behind Firebase Hosting.
+  const useDirect = !path.startsWith("/api/auth/") && !(rest.body instanceof FormData);
+  const token = useDirect ? await directToken() : null;
+  const url = token ? `${BACKEND_URL}${path}` : path;
+  const res = await fetch(url, {
+    credentials: token ? "omit" : "include",
     ...rest,
-    headers: { ...(json !== undefined ? { "Content-Type": "application/json" } : {}), ...(headers || {}) },
+    headers: { ...(json !== undefined ? { "Content-Type": "application/json" } : {}), ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(headers || {}) },
     body: json !== undefined ? JSON.stringify(json) : rest.body,
   });
   if (!res.ok) {
+    if (res.status === 401 && token) _direct = null;
     let msg = res.statusText;
     try {
       const d = await res.json();
@@ -31,14 +58,18 @@ export async function api<T = unknown>(path: string, init: RequestInit & { json?
     throw new ApiError(res.status, msg);
   }
   if (res.status === 204) return undefined as T;
-  return res.json();
+  const data = (await res.json()) as T;
+  if (method === "GET") _cache.set(path, data);
+  else invalidate("/api/");
+  return data;
 }
 
 /* ---------- direct backend access (streaming endpoints bypass the hosting/Next proxy) ---------- */
-export const BACKEND_URL = (process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000").replace(/\/$/, "");
 let _tok: { token: string; exp: number } | null = null;
 /** Short-lived bearer token for calling the backend origin directly (cached, refreshed before expiry). */
 export async function apiToken(): Promise<string> {
+  const d = await directToken();
+  if (d) return d;
   if (_tok && _tok.exp > Date.now() + 60_000) return _tok.token;
   const r = await api<{ token: string; expires_in: number }>("/api/auth/token");
   _tok = { token: r.token, exp: Date.now() + r.expires_in * 1000 };

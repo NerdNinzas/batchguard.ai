@@ -10,12 +10,12 @@ import { HealthRing } from "@/components/app/charts";
 import { TrendingDown, TrendingUp } from "lucide-react";
 import { Badge, Button, Empty, StatusDot, statusTone } from "@/components/ui/Primitives";
 import { PageSkeleton } from "@/components/ui/Primitives";
-import { fmtAgo, get, type Machine, fmtEta, worstForecast } from "@/lib/api";
+import { cached, fmtAgo, get, type Machine, fmtEta, worstForecast } from "@/lib/api";
 import { machineType } from "@/lib/machineTypes";
 
 export default function MachinesPage() {
   const { subscribe } = useApp();
-  const [machines, setMachines] = useState<Machine[] | null>(null);
+  const [machines, setMachines] = useState<Machine[] | null>(() => cached<Machine[]>("/api/machines"));
   const load = () => get<Machine[]>("/api/machines").then(setMachines).catch(() => {});
   useEffect(() => {
     load();

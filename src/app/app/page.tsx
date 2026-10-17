@@ -11,7 +11,7 @@ import { useMuse } from "@/components/muse/MuseLive";
 import { Bars, HealthRing, Sparkline } from "@/components/app/charts";
 import { Badge, Button, Empty, StatusDot, statusTone } from "@/components/ui/Primitives";
 import { PageSkeleton } from "@/components/ui/Primitives";
-import { fmtAgo, fmtTime, get } from "@/lib/api";
+import { cached, fmtAgo, fmtTime, get } from "@/lib/api";
 import { machineType } from "@/lib/machineTypes";
 
 type Spark = { parameter: string; unit?: string | null; points: number[]; latest: Record<string, { value: number; unit?: string | null; state: string }> };
@@ -34,7 +34,7 @@ export default function OverviewPage() {
   const { highlight } = useMuse();
   const hl = (k: string) => (highlight === k ? " muse-highlight" : "");
   const { subscribe, user } = useApp();
-  const [d, setD] = useState<Overview | null>(null);
+  const [d, setD] = useState<Overview | null>(() => cached<Overview>("/api/overview"));
   const [sparks, setSparks] = useState<Record<string, number[]>>({});
 
   const load = () =>

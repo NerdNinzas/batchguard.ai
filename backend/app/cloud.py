@@ -283,9 +283,10 @@ def flush_sync(force: bool = False) -> int:
 # The container disk is ephemeral, so the database is snapshotted to Cloud Storage: every minute when
 # something changed (last hour of readings only; BigQuery keeps the full history), and on shutdown.
 # A fresh container restores the latest snapshot before serving.
-SNAPSHOT_EVERY = 60
-READINGS_RETENTION_S = 24 * 3600
+SNAPSHOT_EVERY = 180
+READINGS_RETENTION_S = 3 * 3600  # charts show ≤ 1 h; BigQuery keeps the full history
 SNAPSHOT_READINGS_S = 3600
+_last_vacuum = 0.0
 _last_snapshot = 0.0
 _last_prune = 0.0
 
@@ -300,16 +301,19 @@ def snapshot_db() -> str | None:
         return None
     from .db import conn
 
+    global _last_vacuum
     tmp = Path(tempfile.mkdtemp(prefix="bgdb-")) / "snapshot.db"
     try:
         dst = sqlite3.connect(tmp)
         with dst:
-            conn().backup(dst)
+            conn().backup(dst, pages=256, sleep=0.005)  # incremental: never holds the live database for long
         dst.execute("DELETE FROM readings WHERE ts < ?", (_time.time() - SNAPSHOT_READINGS_S,))
         dst.execute("DELETE FROM api_logs WHERE ts < ?", (_time.time() - 6 * 3600,))
         dst.execute("DELETE FROM _changes")
         dst.commit()
-        dst.execute("VACUUM")
+        if _time.time() - _last_vacuum > 3600:  # VACUUM is CPU-heavy; the copy is small enough to ship un-vacuumed in between
+            dst.execute("VACUUM")
+            _last_vacuum = _time.time()
         dst.close()
         st = _client("storage")
         if st is None:
@@ -348,12 +352,21 @@ def restore_db_if_missing() -> bool:
 
 
 def prune_readings() -> int:
+    """Delete old readings in small batches so the write lock is never held for long."""
     from .db import tx
 
+    cutoff = _time.time() - READINGS_RETENTION_S
+    total = 0
+    for _ in range(40):
+        with tx(sync=False) as c:
+            n = c.execute("DELETE FROM readings WHERE id IN (SELECT id FROM readings WHERE ts < ? LIMIT 5000)", (cutoff,)).rowcount
+        total += n
+        if n < 5000:
+            break
+        _time.sleep(0.05)
     with tx(sync=False) as c:
-        n = c.execute("DELETE FROM readings WHERE ts < ?", (_time.time() - READINGS_RETENTION_S,)).rowcount
-        c.execute("DELETE FROM api_logs WHERE ts < ?", (_time.time() - 7 * 86400,))
-    return n
+        c.execute("DELETE FROM api_logs WHERE ts < ?", (_time.time() - 2 * 86400,))
+    return total
 
 
 def _sync_loop() -> None:
@@ -364,7 +377,7 @@ def _sync_loop() -> None:
         except Exception as e:  # noqa: BLE001
             log.warning("firestore sync failed: %s", e)
         now_t = _time.time()
-        if now_t - _last_prune > 600:
+        if now_t - _last_prune > 300:
             _last_prune = now_t
             try:
                 prune_readings()

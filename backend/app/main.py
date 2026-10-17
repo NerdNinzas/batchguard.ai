@@ -83,4 +83,8 @@ for r in (auth.router, orgs.router, machines.router, device.router, incidents_ro
 
 @app.get("/api/health")
 def health() -> dict:
-    return {"ok": True, "gemini": settings.gemini_enabled, "email": settings.email_enabled, "smtp": False, "demo": settings.demo_mode, "vertex": settings.google_genai_use_vertexai, "voice": settings.voice_enabled, "cloud": cloud.status(), "machines": conn().execute("SELECT COUNT(*) n FROM machines").fetchone()["n"]}
+    try:
+        db_mb = round(settings.db_file.stat().st_size / 1e6, 1)
+    except OSError:
+        db_mb = None
+    return {"ok": True, "db_mb": db_mb, "gemini": settings.gemini_enabled, "email": settings.email_enabled, "smtp": False, "demo": settings.demo_mode, "vertex": settings.google_genai_use_vertexai, "voice": settings.voice_enabled, "cloud": cloud.status(), "machines": conn().execute("SELECT COUNT(*) n FROM machines").fetchone()["n"]}
