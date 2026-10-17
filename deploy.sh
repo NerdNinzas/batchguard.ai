@@ -40,7 +40,8 @@ deploy_frontend() {
   BACKEND_URL=$(gcloud run services describe batchguard-backend --region "$REGION" --format 'value(status.url)')
   echo "▶ building frontend image (BACKEND_URL=$BACKEND_URL)"
   # the public URL is only known after the first deploy; pass it in on re-deploys for correct code samples
-  APP_URL="${APP_URL:-$(gcloud run services describe batchguard-frontend --region "$REGION" --format 'value(status.url)' 2>/dev/null || echo https://batchguard.run.app)}"
+  # public URL = Firebase Hosting site in front of Cloud Run (firebase.json); falls back to the Cloud Run URL
+  APP_URL="${APP_URL:-https://batchguard.web.app}"
   gcloud builds submit . --config cloudbuild.frontend.yaml --substitutions "_IMAGE=$REPO/frontend:latest,_APP_URL=$APP_URL,_BACKEND_URL=$BACKEND_URL" --quiet
   echo "▶ deploying frontend (scale-to-zero)"
   gcloud run deploy batchguard-frontend --image "$REPO/frontend:latest" --region "$REGION" \
@@ -48,9 +49,11 @@ deploy_frontend() {
     --set-env-vars "BACKEND_URL=$BACKEND_URL" --quiet
   FRONTEND_URL=$(gcloud run services describe batchguard-frontend --region "$REGION" --format 'value(status.url)')
   echo "✓ frontend: $FRONTEND_URL"
-  echo "▶ telling the backend its public URL (for device code samples + CORS)"
-  gcloud run services update batchguard-backend --region "$REGION" --update-env-vars "APP_URL=$FRONTEND_URL" --quiet
-  echo "✓ done → $FRONTEND_URL"
+  echo "▶ telling the backend its public URL (for links in emails/calls + CORS)"
+  gcloud run services update batchguard-backend --region "$REGION" --update-env-vars "APP_URL=$APP_URL,CORS_ORIGINS=$FRONTEND_URL" --quiet
+  echo "▶ publishing the Firebase Hosting rewrite (firebase.json → Cloud Run)"
+  GOOGLE_APPLICATION_CREDENTIALS="${GOOGLE_APPLICATION_CREDENTIALS:-backend/secrets/sa.json}" npx -y firebase-tools@latest deploy --only hosting --project "$PROJECT" --non-interactive >/dev/null 2>&1 && echo "✓ hosting: $APP_URL" || echo "! hosting deploy skipped (run: npx firebase-tools deploy --only hosting)"
+  echo "✓ done → $APP_URL (Cloud Run: $FRONTEND_URL)"
 }
 
 case "$WHAT" in
