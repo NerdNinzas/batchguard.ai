@@ -40,7 +40,7 @@ Two deployable units, one repository:
 | 3D | three.js 0.182, @react-three/fiber, drei, Kenney Factory Kit + Poly Haven HDRI/PBR (CC0) | Live 3D hall that reflects machine status |
 | Graphs | @xyflow/react (workflow builder, Dograh call-flow viewer), recharts | Node builder for the line; charts with limit bands |
 | API | FastAPI + uvicorn, pydantic v2, sse-starlette | Typed, async, streaming |
-| Data | SQLite (WAL, per-thread connections, serialised writes) | Zero-ops hot path; one file |
+| Data | Firestore as the system of record; SQLite as the in-process working copy (triggers capture every change → write-through every 5 s; hydrate from Firestore on start) | Durable across redeploys, fast local queries, no ops |
 | Cloud data | Firestore (mirror of orgs, machines, incidents, contacts, notifications, evidence, work orders), Pub/Sub → BigQuery (every reading), Cloud Storage (manuals, photos) | Durable Google data layer and analytics |
 | AI | Vertex AI Gemini 2.5 Flash (fast paths) and Pro (reasoning), via `google-genai` | Extraction, vision, chat, outcomes |
 | Agent | Google ADK 2.x: `SequentialAgent` of a `ParallelAgent` (evidence gathering) → hypothesis generator → evaluator → recommender → reporter, 7 function tools | Evidence-first diagnosis with traceable tool calls |
@@ -52,9 +52,9 @@ Two deployable units, one repository:
 
 ---
 
-## 3. Data model (SQLite, mirrored to Firestore)
+## 3. Data model (Firestore collections, mirrored into the local SQLite working copy)
 
-`users`, `orgs`, `contacts` (escalation ladder with quiet hours), `lines`, `machines` (device id, key hash, manual text, knowledge sections, status, health), `parameters` (limits + source page + verified flag), `readings` (time series), `latest` (per-parameter current value, state, **forecast**), `events`, `incidents` (signals, report JSON, feedback), `notifications`, `workflows` (node builder), `api_logs`, `agent_runs` (tool calls, source, error), `chat`, `voice_settings`, `voice_calls`, `evidence` (photos + Gemini analysis), `work_orders`.
+Collections (one document per row, same field names): `users`, `orgs`, `contacts` (escalation ladder with quiet hours), `lines`, `machines` (device id, key hash, manual text, knowledge sections, status, health), `parameters` (limits + source page + verified flag), `readings` (time series), `latest` (per-parameter current value, state, **forecast**), `events`, `incidents` (signals, report JSON, feedback), `notifications`, `workflows` (node builder), `api_logs`, `agent_runs` (tool calls, source, error), `chat`, `voice_settings`, `voice_calls`, `evidence` (photos + Gemini analysis), `work_orders`, plus `reading_batches` (10-second telemetry batches, TTL 2 h). SQLite triggers record every insert/update/delete in a `_changes` table; after each transaction the changed rows are queued and written to Firestore (coalesced, high-churn rows such as `latest` and `machines` at most every 15 s). On start `cloud.hydrate()` streams every collection back into SQLite.
 
 ---
 
@@ -116,6 +116,7 @@ Two deployable units, one repository:
 4. **Navigation** — the `navigate` tool takes a page, a target id and a *section*; the frontend routes there and puts a yellow spotlight on the exact element (a parameter chart, the device key, work orders, a contact, the email card…) while Muse keeps talking. Muse's persona: an upbeat plant manager who calls you boss.
 
 ### 4.9 Observability and evaluation
+- Streaming endpoints (live SSE stream, chat, voice websocket) are called on the backend origin directly with a short-lived bearer token (`/api/auth/token`), so they work behind Firebase Hosting, which buffers proxied responses.
 - `/app/observability`: request latency and status by route, ingest rate, agent runs with every tool call.
 - `/app/settings` blind evaluation: record an injected fault, score the first report that follows (detected, delay, top-1/top-3).
 - Cloud Logging receives structured logs; BigQuery holds every reading for analytics.

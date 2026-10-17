@@ -145,7 +145,7 @@ echo <PROJECT> > backend/.gcp-project
 
 `deploy.sh` builds both images with Cloud Build, pushes to Artifact Registry, deploys to Cloud Run, wires the frontend to the backend URL and the backend to the public app URL. A $100 budget alert is set on the project.
 
-> The backend keeps its SQLite file on the container disk; Firestore holds a mirror and BigQuery every reading. Mount a volume at `/data` for persistence across redeploys.
+> **Data:** Firestore is the system of record. Every row change in the backend's local SQLite working copy is captured by triggers and written through to Firestore within seconds; readings go as 10-second batches with a 2-hour TTL (full history in BigQuery). On start the backend rebuilds its local copy from Firestore, so redeploys and restarts keep all data.
 
 ---
 
