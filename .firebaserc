@@ -1,3 +1,17 @@
 {
-  "projects": { "default": "batchguard-ai-33e4" }
+  "projects": {
+    "default": "batchguard-ai-33e4"
+  },
+  "targets": {
+    "batchguard-ai-33e4": {
+      "hosting": {
+        "app": [
+          "batchguard"
+        ],
+        "sim": [
+          "batchguard-sim"
+        ]
+      }
+    }
+  }
 }

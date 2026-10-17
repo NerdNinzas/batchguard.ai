@@ -22,6 +22,7 @@ Built for the **Google Cloud AI Builder Cup 2026 · Manufacturing** theme on Goo
 | Action | Photo evidence read by Gemini vision, work-order Kanban per machine, feedback loop on resolution |
 | Muse copilot | ChatGPT-style streaming chat, realtime Indian-English voice, and voice/chat navigation that spotlights any part of the dashboard |
 | Visibility | Live 3D factory, workflow node builder, telemetry table, observability, blind evaluation scoreboard |
+| Simulator | Separate virtual factory app that streams telemetry into the demo account: dial parameters, inject faults, add machines, watch Muse react |
 
 ---
 
@@ -127,6 +128,26 @@ The voice websocket connects straight to the backend origin, so the browser must
 ## Voice escalation (phone)
 
 `/app/voice` lists five call types as Dograh workflows (JSON in `backend/app/voice/workflows`), lets you pick a TeleCMI caller number, publish the workflows, place a test call with a condition preset, and review call history with transcripts, recordings and the extracted outcome. An acknowledgement spoken on the call acknowledges the incident; a follow-up call's verdict resolves it. Auto-dial is per organisation and off by default.
+
+---
+
+## Virtual factory simulator
+
+A separate app (`simulator/`, its own Cloud Run service and Hosting site: **https://batchguard-sim.web.app**) that behaves like a real plant's PLC gateway for the demo account. It signs in as the demo owner, obtains a device key per machine, and streams telemetry to `POST /v1/telemetry` every second, exactly like a device would. The 3D factory on the page is the simulated plant; the control panel lets you:
+
+- drag any parameter to a target value over a chosen ramp time (temperature, vibration, pressure, flow…),
+- inject fault presets (bearing wear, overload, belt slip, pressure drop, cavitation, seal overheat, feed starvation, reject spike, slow drift),
+- stop a machine (telemetry stops → BatchGuard marks it stale) and start it again,
+- change production speed, add machines of any type (they are onboarded into BatchGuard with template limits) or remove them,
+- watch what BatchGuard said back for each post (detected signals) in the live log.
+
+Run it locally with the backend's built-in producer turned off (`DEMO_PRODUCER=false` in `backend/.env`):
+
+```bash
+cd simulator && npm install && cp .env.example .env.local && npm run dev   # http://localhost:3002
+```
+
+Deploy with `./deploy.sh simulator` (always-on single instance; `all` deploys backend, frontend and simulator).
 
 ---
 

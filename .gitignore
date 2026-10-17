@@ -53,3 +53,11 @@ backend/secrets/
 
 # Reference Vite app studied for the Dograh integration (nested repo; integrated under backend/app/voice + src/app/app/voice)
 /ecoforge-voice-dograh/
+
+# simulator app (own package; keep its build artefacts out of the main repo + Cloud Build uploads)
+/simulator/node_modules/
+/simulator/.next/
+/simulator/.env*
+!/simulator/.env.example
+/simulator/*.tsbuildinfo
+/simulator/next-env.d.ts

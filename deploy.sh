@@ -30,7 +30,7 @@ deploy_backend() {
     --service-account "$SA" --allow-unauthenticated --cpu 1 --memory 1Gi --min-instances 1 --max-instances 1 \
     --cpu-boost --no-cpu-throttling --timeout 3600 --concurrency 80 --port 8080 --session-affinity \
     --set-secrets "$SECRETS" \
-    --set-env-vars "APP_URL=${APP_URL:-https://batchguard.web.app},CORS_ORIGINS=${CORS_ORIGINS:-},GOOGLE_GENAI_USE_VERTEXAI=true,GOOGLE_CLOUD_PROJECT=$PROJECT,GOOGLE_CLOUD_LOCATION=global,GCP_PROJECT=$PROJECT,GCP_LOCATION=$REGION,GCS_BUCKET=$PROJECT-manuals,BIGQUERY_DATASET=batchguard,PUBSUB_TOPIC_TELEMETRY=telemetry,CLOUD_LOGGING=true,DEMO_MODE=true,FIREBASE_PROJECT_ID=$PROJECT,DOGRAH_BASE_URL=$DOGRAH_BASE_URL,DOGRAH_TELEPHONY_CONFIG_ID=$DOGRAH_TELEPHONY_CONFIG_ID,DOGRAH_FROM_PHONE_NUMBER_ID=$DOGRAH_FROM_PHONE_NUMBER_ID,VOICE_AUTO_DIAL=false,DB_SNAPSHOT=true,RESEND_FROM=$RESEND_FROM" \
+    --set-env-vars "APP_URL=${APP_URL:-https://batchguard.web.app},CORS_ORIGINS=${CORS_ORIGINS:-},GOOGLE_GENAI_USE_VERTEXAI=true,GOOGLE_CLOUD_PROJECT=$PROJECT,GOOGLE_CLOUD_LOCATION=global,GCP_PROJECT=$PROJECT,GCP_LOCATION=$REGION,GCS_BUCKET=$PROJECT-manuals,BIGQUERY_DATASET=batchguard,PUBSUB_TOPIC_TELEMETRY=telemetry,CLOUD_LOGGING=true,DEMO_MODE=true,DEMO_PRODUCER=false,FIREBASE_PROJECT_ID=$PROJECT,DOGRAH_BASE_URL=$DOGRAH_BASE_URL,DOGRAH_TELEPHONY_CONFIG_ID=$DOGRAH_TELEPHONY_CONFIG_ID,DOGRAH_FROM_PHONE_NUMBER_ID=$DOGRAH_FROM_PHONE_NUMBER_ID,VOICE_AUTO_DIAL=false,DB_SNAPSHOT=true,RESEND_FROM=$RESEND_FROM" \
     --quiet
   BACKEND_URL=$(gcloud run services describe batchguard-backend --region "$REGION" --format 'value(status.url)')
   echo "✓ backend: $BACKEND_URL"
@@ -52,13 +52,28 @@ deploy_frontend() {
   echo "▶ telling the backend its public URL (for links in emails/calls + CORS)"
   gcloud run services update batchguard-backend --region "$REGION" --update-env-vars "APP_URL=$APP_URL,CORS_ORIGINS=$FRONTEND_URL" --quiet
   echo "▶ publishing the Firebase Hosting rewrite (firebase.json → Cloud Run)"
-  GOOGLE_APPLICATION_CREDENTIALS="${GOOGLE_APPLICATION_CREDENTIALS:-backend/secrets/sa.json}" npx -y firebase-tools@latest deploy --only hosting --project "$PROJECT" --non-interactive >/dev/null 2>&1 && echo "✓ hosting: $APP_URL" || echo "! hosting deploy skipped (run: npx firebase-tools deploy --only hosting)"
+  GOOGLE_APPLICATION_CREDENTIALS="${GOOGLE_APPLICATION_CREDENTIALS:-backend/secrets/sa.json}" npx -y firebase-tools@latest deploy --only hosting:app --project "$PROJECT" --non-interactive >/dev/null 2>&1 && echo "✓ hosting: $APP_URL" || echo "! hosting deploy skipped (run: npx firebase-tools deploy --only hosting)"
   echo "✓ done → $APP_URL (Cloud Run: $FRONTEND_URL)"
+}
+
+deploy_simulator() {
+  BACKEND_URL=$(gcloud run services describe batchguard-backend --region "$REGION" --format 'value(status.url)')
+  echo "▶ building simulator image"
+  gcloud builds submit simulator --config simulator/cloudbuild.yaml --substitutions "_IMAGE=$REPO/simulator:latest,_DASHBOARD_URL=${APP_URL:-https://batchguard.web.app}" --quiet
+  echo "▶ deploying simulator (always-on, single instance: it is the factory's telemetry source)"
+  gcloud run deploy batchguard-simulator --image "$REPO/simulator:latest" --region "$REGION" \
+    --allow-unauthenticated --cpu 1 --memory 512Mi --min-instances 1 --max-instances 1 --port 8080 --timeout 3600 \
+    --set-env-vars "BATCHGUARD_URL=$BACKEND_URL,DEMO_EMAIL=demo@batchguard.ai,DEMO_PASSWORD=demo1234,NEXT_PUBLIC_DASHBOARD_URL=${APP_URL:-https://batchguard.web.app}" --quiet
+  SIM_URL=$(gcloud run services describe batchguard-simulator --region "$REGION" --format 'value(status.url)')
+  echo "✓ simulator: $SIM_URL"
+  echo "▶ publishing Firebase Hosting rewrite for the simulator site"
+  GOOGLE_APPLICATION_CREDENTIALS="${GOOGLE_APPLICATION_CREDENTIALS:-backend/secrets/sa.json}" npx -y firebase-tools@latest deploy --only hosting:sim --project "$PROJECT" --non-interactive >/dev/null 2>&1 && echo "✓ hosting: https://batchguard-sim.web.app" || echo "! hosting deploy skipped"
 }
 
 case "$WHAT" in
   backend) deploy_backend ;;
   frontend) deploy_frontend ;;
-  all) deploy_backend; deploy_frontend ;;
-  *) echo "usage: $0 [backend|frontend|all]"; exit 1 ;;
+  simulator) deploy_simulator ;;
+  all) deploy_backend; deploy_frontend; deploy_simulator ;;
+  *) echo "usage: $0 [backend|frontend|simulator|all]"; exit 1 ;;
 esac

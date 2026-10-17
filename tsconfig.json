@@ -38,6 +38,7 @@
   ],
   "exclude": [
     "node_modules",
-    "ecoforge-voice-dograh"
+    "ecoforge-voice-dograh",
+    "simulator"
   ]
 }

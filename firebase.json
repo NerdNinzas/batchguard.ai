@@ -1,13 +1,58 @@
 {
-  "hosting": {
-    "site": "batchguard",
-    "public": "public/hosting",
-    "ignore": ["**/.*"],
-    "rewrites": [
-      { "source": "**", "run": { "serviceId": "batchguard-frontend", "region": "asia-southeast1" } }
-    ],
-    "headers": [
-      { "source": "**", "headers": [{ "key": "Cache-Control", "value": "no-cache" }] }
-    ]
-  }
+  "hosting": [
+    {
+      "target": "app",
+      "public": "public/hosting",
+      "ignore": [
+        "**/.*"
+      ],
+      "rewrites": [
+        {
+          "source": "**",
+          "run": {
+            "serviceId": "batchguard-frontend",
+            "region": "asia-southeast1"
+          }
+        }
+      ],
+      "headers": [
+        {
+          "source": "**",
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "no-cache"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "target": "sim",
+      "public": "public/hosting",
+      "ignore": [
+        "**/.*"
+      ],
+      "rewrites": [
+        {
+          "source": "**",
+          "run": {
+            "serviceId": "batchguard-simulator",
+            "region": "asia-southeast1"
+          }
+        }
+      ],
+      "headers": [
+        {
+          "source": "**",
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "no-cache"
+            }
+          ]
+        }
+      ]
+    }
+  ]
 }

@@ -44,7 +44,10 @@ async def lifespan(app: FastAPI):
     task = asyncio.create_task(_sweeper())
     if settings.demo_mode:
         await asyncio.to_thread(demo.ensure_seeded)
-        demo.start_producer()
+        if settings.demo_producer:
+            demo.start_producer()
+        else:
+            print("demo producer off — telemetry comes from the virtual factory simulator")
     print(f"BatchGuard backend ready · gemini={('vertex:' + settings.google_cloud_location) if settings.google_genai_use_vertexai and settings.gemini_enabled else 'on' if settings.gemini_enabled else 'off (fallback)'} · gcp={settings.gcp_project or 'off'} · store=sqlite{' + gcs snapshots' if settings.db_snapshot else ''}{' + firestore mirror' if cloud.enabled() else ''} · email={'resend' if settings.email_enabled else 'simulated'} · voice={'dograh' if settings.voice_enabled else 'off'} · db={settings.db_file}")
     yield
     task.cancel()

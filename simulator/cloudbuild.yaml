@@ -1,0 +1,10 @@
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args: ["build", "-t", "${_IMAGE}", "--build-arg", "NEXT_PUBLIC_DASHBOARD_URL=${_DASHBOARD_URL}", "."]
+images: ["${_IMAGE}"]
+substitutions:
+  _IMAGE: ""
+  _DASHBOARD_URL: "https://batchguard.web.app"
+options:
+  logging: CLOUD_LOGGING_ONLY
+  machineType: E2_HIGHCPU_8

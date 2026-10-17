@@ -56,6 +56,7 @@ class Settings(BaseSettings):
     escalation_timeout_seconds: int = 120
     trend_window_seconds: int = 60
     demo_mode: bool = True
+    demo_producer: bool = True  # built-in telemetry producer; off when the virtual factory simulator feeds the demo org
 
     @property
     def cors_origin_list(self) -> list[str]:
