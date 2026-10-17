@@ -34,6 +34,8 @@ type MuseCtx = {
   goTo: (path: string, highlight?: string | null) => void;
   highlight: string | null;
   lastNav: NavCmd | null;
+  editedTick: number;
+  lastEdit: { what: string; label: string } | null;
 };
 
 const Ctx = createContext<MuseCtx | null>(null);
@@ -84,6 +86,9 @@ export function MuseLiveProvider({ children }: { children: ReactNode }) {
   const [outLevel, setOutLevel] = useState(0);
   const [highlight, setHighlight] = useState<string | null>(null);
   const [lastNav, setLastNav] = useState<NavCmd | null>(null);
+  const [editedTick, setEditedTick] = useState(0);
+  const [lastEdit, setLastEdit] = useState<{ what: string; label: string } | null>(null);
+  const onEdited = useCallback((what: string, label: string) => { setLastEdit({ what, label }); setEditedTick((t) => t + 1); }, []);
   const hlTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const goTo = useCallback((path: string, hl?: string | null, quiet = false) => {
@@ -125,7 +130,7 @@ export function MuseLiveProvider({ children }: { children: ReactNode }) {
         if (ev.type === "delta") setMessages((ms) => ms.map((m) => (m.id === reply.id ? { ...m, text: m.text + String(ev.text) } : m)));
         else if (ev.type === "tool") setMessages((ms) => ms.map((m) => (m.id === reply.id ? { ...m, tool: String(ev.name) } : m)));
         else if (ev.type === "navigate") goTo(String(ev.path), (ev.highlight as string | null) ?? null);
-        else if (ev.type === "edited") { toast("success", "Updated", String(ev.label), 4500); goTo(String(ev.path), (ev.highlight as string | null) ?? null, true); }
+        else if (ev.type === "edited") { toast("success", "Updated", String(ev.label), 4500); onEdited(String(ev.what), String(ev.label)); goTo(String(ev.path), (ev.highlight as string | null) ?? null, true); }
         else if (ev.type === "error") setMessages((ms) => ms.map((m) => (m.id === reply.id ? { ...m, text: m.text || String(ev.text) } : m)));
       };
       for (;;) {
@@ -146,7 +151,7 @@ export function MuseLiveProvider({ children }: { children: ReactNode }) {
       setMessages((ms) => ms.map((m) => (m.id === reply.id ? { ...m, streaming: false, tool: undefined } : m)));
       setBusy(false);
     }
-  }, [messages, busy, goTo, toast]);
+  }, [messages, busy, goTo, toast, onEdited]);
 
   const reset = useCallback(() => setMessages(greeting ? [{ id: uid(), role: "muse", text: greeting.text, action: greeting.action }] : []), [greeting]);
 
@@ -267,6 +272,7 @@ export function MuseLiveProvider({ children }: { children: ReactNode }) {
         goTo(String(msg.path), (msg.highlight as string | null) ?? null);
       } else if (t === "edited") {
         toast("success", "Updated", String(msg.label), 4500);
+        onEdited(String(msg.what), String(msg.label));
         goTo(String(msg.path), (msg.highlight as string | null) ?? null, true);
       } else if (t === "error") {
         setVoiceError(String(msg.text));
@@ -301,12 +307,12 @@ export function MuseLiveProvider({ children }: { children: ReactNode }) {
       proc.connect(silent);
       silent.connect(mic.destination);
     } catch (e) { return fail(`Microphone capture failed: ${e instanceof Error ? e.message : String(e)}`); }
-  }, [voice, goTo, stopPlayback, stopVoice, toast]);
+  }, [voice, goTo, stopPlayback, stopVoice, toast, onEdited]);
 
   useEffect(() => () => { wsRef.current?.close(); micStream.current?.getTracks().forEach((t) => t.stop()); }, []);
 
-  const value = useMemo<MuseCtx>(() => ({ messages, busy, send, reset, greeting, voice, voiceError, captions, liveCaption, level, outLevel, startVoice, stopVoice, goTo, highlight, lastNav }),
-    [messages, busy, send, reset, greeting, voice, voiceError, captions, liveCaption, level, outLevel, startVoice, stopVoice, goTo, highlight, lastNav]);
+  const value = useMemo<MuseCtx>(() => ({ messages, busy, send, reset, greeting, voice, voiceError, captions, liveCaption, level, outLevel, startVoice, stopVoice, goTo, highlight, lastNav, editedTick, lastEdit }),
+    [messages, busy, send, reset, greeting, voice, voiceError, captions, liveCaption, level, outLevel, startVoice, stopVoice, goTo, highlight, lastNav, editedTick, lastEdit]);
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 

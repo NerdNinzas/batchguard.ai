@@ -1,5 +1,5 @@
 "use client";
-import { Spot } from "@/components/muse/MuseLive";
+import { Spot, useMuse } from "@/components/muse/MuseLive";
 
 import { ExternalLink, Mail, Send } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -60,6 +60,11 @@ export default function SettingsPage() {
   const [score, setScore] = useState<Score | null>(null);
   const [machines, setMachines] = useState<Machine[]>([]);
   const [run, setRun] = useState({ machine_id: "", injected_fault: "bearing_wear", note: "" });
+  const { editedTick, lastEdit } = useMuse();
+  useEffect(() => {
+    if (!lastEdit || lastEdit.what !== "org") return;
+    refreshUser().then(() => get<{ name: string; owner_name: string; owner_email: string; phone: string; industry: string; size: string; timezone: string }>("/api/org").then((o) => setOrg({ name: o.name, owner_name: o.owner_name, owner_email: o.owner_email, phone: o.phone, industry: o.industry, size: o.size, timezone: o.timezone })).catch(() => {}));
+  }, [editedTick, lastEdit, refreshUser]);
   useEffect(() => subscribe((e) => {
     if (e.type === "org") { const o = e.data as Record<string, string>; setOrg((cur) => ({ ...cur, name: o.name ?? cur.name, owner_name: o.owner_name ?? cur.owner_name, owner_email: o.owner_email ?? cur.owner_email, phone: o.phone ?? cur.phone, industry: o.industry ?? cur.industry, timezone: o.timezone ?? cur.timezone })); refreshUser(); }
   }), [subscribe, refreshUser]);

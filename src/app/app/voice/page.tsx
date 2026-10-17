@@ -1,5 +1,5 @@
 "use client";
-import { Spot } from "@/components/muse/MuseLive";
+import { Spot, useMuse } from "@/components/muse/MuseLive";
 
 import "@xyflow/react/dist/style.css";
 import { Background, Handle, Position, ReactFlow, type Edge, type Node, type NodeProps } from "@xyflow/react";
@@ -344,11 +344,13 @@ export default function VoicePage() {
   const [detail, setDetail] = useState<string | null>(null);
   const [syncing, setSyncing] = useState<string | null>(null);
   const [testing, setTesting] = useState<string | null>(null);
+  const { editedTick } = useMuse();
 
   const load = useCallback(async () => {
     const [s, t, c, i] = await Promise.all([get<VoiceStatus>("/api/voice/status"), get<CallType[]>("/api/voice/call-types"), get<VoiceCall[]>("/api/voice/calls?limit=40"), get<Incident[]>("/api/incidents?limit=30")]);
     setStatus(s); setTypes(t); setCalls(c); setIncidents(i);
   }, []);
+  useEffect(() => { if (editedTick) load().catch(() => {}); }, [editedTick, load]);
   useEffect(() => { load().catch((e) => toast("error", "Voice AI", e instanceof Error ? e.message : String(e))); }, [load, toast]);
   useEffect(() => subscribe((e) => {
     if (e.type === "voice_call") {

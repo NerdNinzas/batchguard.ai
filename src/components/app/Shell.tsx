@@ -115,7 +115,7 @@ export function Shell({ children }: { children: ReactNode }) {
       <MuseLiveProvider>
       <div className="flex min-h-screen bg-bg">
         {/* sidebar */}
-        <aside className={`fixed inset-y-0 left-0 z-40 w-64 border-r border-line bg-white transition-transform lg:static lg:translate-x-0 ${open ? "translate-x-0" : "-translate-x-full"}`}>
+        <aside className={`fixed inset-y-0 left-0 z-40 flex w-64 flex-col overflow-y-auto border-r border-line bg-white transition-transform lg:sticky lg:top-0 lg:h-screen lg:translate-x-0 ${open ? "translate-x-0" : "-translate-x-full"}`}>
           <div className="flex h-16 items-center justify-between px-5">
             <Link href="/app" className="flex items-center gap-2.5">
               <MuseLogo size={36} />

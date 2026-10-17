@@ -8,7 +8,7 @@ import { useCallback, useEffect, useState } from "react";
 import { KeyReveal } from "@/components/app/KeyReveal";
 import { WorkOrdersBoard } from "@/components/app/WorkOrders";
 import { useApp } from "@/components/app/Shell";
-import { Spot, useHighlight } from "@/components/muse/MuseLive";
+import { Spot, useHighlight, useMuse } from "@/components/muse/MuseLive";
 import { HealthRing, LimitChart } from "@/components/app/charts";
 import { Badge, Button, Card, Modal, Spinner, StatusDot, statusTone } from "@/components/ui/Primitives";
 import { useToast } from "@/components/ui/Toast";
@@ -31,6 +31,7 @@ export default function MachinePage() {
   const [confirmDel, setConfirmDel] = useState(false);
   const [contacts, setContacts] = useState<Contact[]>([]);
   const hl = useHighlight(id);
+  const { editedTick } = useMuse();
   useEffect(() => { get<Contact[]>("/api/contacts").then(setContacts).catch(() => setContacts([])); }, []);
 
   const load = useCallback(async () => {
@@ -45,6 +46,7 @@ export default function MachinePage() {
     setEvents(ee);
     setIncidents(ii.filter((i) => i.machine_id === id));
   }, [id, window_]);
+  useEffect(() => { if (editedTick) load().catch(() => {}); }, [editedTick, load]);
 
   useEffect(() => {
     load().catch(() => router.replace("/app/machines"));

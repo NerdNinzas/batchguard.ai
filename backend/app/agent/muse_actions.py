@@ -223,13 +223,47 @@ def make_action_tools(org_id: str, user: dict[str, Any], emit: Callable[[dict[st
         bus.publish(org_id, "voice_settings", {"auto_dial": st["auto_dial"], "from_number": st.get("from_number")})
         return edited("voice", f"Voice settings: auto-dial {'on' if st['auto_dial'] else 'off'}" + (f", caller id #{st['from_phone_number_id']}" if from_phone_number_id is not None else ""), "/app/voice", "auto-dial" if auto_dial is not None else "numbers", {"settings": {"auto_dial": st["auto_dial"]}})
 
+    # ---------------- phone calls (Dograh → Gemini Live → TeleCMI) ----------------
+    def place_call(call_type: str = "critical_alert", contact: str | None = None, phone: str | None = None, incident_id: str | None = None) -> dict[str, Any]:
+        from ..voice import calls, dograh
+
+        if not dograh.enabled():
+            return {"error": "voice calling is not configured (DOGRAH_API_KEY)"}
+        key = (call_type or "critical_alert").strip().lower().replace(" ", "_").replace("-", "_")
+        aliases = {"critical": "critical_alert", "alert": "critical_alert", "emergency": "emergency_escalation", "escalation": "emergency_escalation", "warning": "warning_notice", "advisory": "warning_notice",
+                   "followup": "resolution_followup", "follow_up": "resolution_followup", "resolution": "resolution_followup", "test": "test_call"}
+        key = aliases.get(key, key)
+        if key not in calls.CALL_TYPES:
+            return {"error": f"unknown call type; use one of {list(calls.CALL_TYPES)}"}
+        ct = _find_contact(org_id, contact) if contact else None
+        inc = row(conn().execute("SELECT * FROM incidents WHERE id=? AND org_id=?", (incident_id, org_id)).fetchone()) if incident_id else None
+        if incident_id and not inc:
+            return {"error": "incident not found"}
+        if not ct and not phone and inc:
+            ct = row(conn().execute("SELECT * FROM contacts WHERE org_id=? ORDER BY escalation_order LIMIT 1", (org_id,)).fetchone())
+        to = (phone or (ct or {}).get("phone") or "").strip()
+        if not to:
+            return {"error": "need a contact with a phone number or an explicit phone number"}
+        org = row(conn().execute("SELECT * FROM orgs WHERE id=?", (org_id,)).fetchone()) or {"id": org_id, "name": "the factory"}
+        try:
+            c = calls.place_call(org, key, to, contact=ct, incident=inc, placed_by=f"muse:{by}")
+        except ValueError as e:
+            return {"error": str(e)}
+        if c.get("status") == "failed":
+            return {"error": f"call failed: {c.get('error')}"}
+        label = f"Calling {ct['name'] if ct else to} · {c.get('title')}" + (f" · from {c.get('from_number')}" if c.get("from_number") else "")
+        return edited("call", label, "/app/voice", "history", {"call": {"id": c["id"], "status": c["status"], "to": c["to_number"], "run": c.get("run_name")}})
+
     impls = {
+        "place_call": place_call,
         "add_contact": add_contact, "update_contact": update_contact, "delete_contact": delete_contact, "update_org": update_org,
         "update_machine": update_machine, "update_parameter_limits": update_parameter_limits, "create_work_order": create_work_order,
         "update_work_order": update_work_order, "acknowledge_incident": acknowledge_incident, "resolve_incident": resolve_incident, "set_voice_settings": set_voice_settings,
     }
     S = types.Schema
     decls = [
+        types.FunctionDeclaration(name="place_call", description="Place a real phone call through Muse's voice line (Gemini Live over TeleCMI). call_type: critical_alert | emergency_escalation | warning_notice | resolution_followup | test_call. Give a contact (name/role) or an explicit phone number; pass incident_id so the brief comes from that incident's report. Confirm the number with the user before calling.",
+                                  parameters=S(type="OBJECT", properties={"call_type": S(type="STRING"), "contact": S(type="STRING"), "phone": S(type="STRING"), "incident_id": S(type="STRING")})),
         types.FunctionDeclaration(name="add_contact", description="Add an escalation contact (name required; role, phone in international format, email, escalation_order 1=first to be called, quiet hours HH:MM).",
                                   parameters=S(type="OBJECT", properties={"name": S(type="STRING"), "role": S(type="STRING"), "phone": S(type="STRING"), "email": S(type="STRING"), "escalation_order": S(type="INTEGER"), "quiet_start": S(type="STRING"), "quiet_end": S(type="STRING")}, required=["name"])),
         types.FunctionDeclaration(name="update_contact", description="Edit an escalation contact found by name, role or id. Only pass the fields to change (name, role, phone, email, escalation_order, quiet_start, quiet_end).",

@@ -1,5 +1,5 @@
 "use client";
-import { Spot } from "@/components/muse/MuseLive";
+import { Spot, useMuse } from "@/components/muse/MuseLive";
 
 import { Plus, Save, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -13,7 +13,8 @@ export default function ContactsPage() {
   const [items, setItems] = useState<Contact[] | null>(null);
   const [draft, setDraft] = useState<Partial<Contact>>({ name: "", role: "", phone: "", email: "", escalation_order: 1, quiet_start: "", quiet_end: "" });
   const load = () => get<Contact[]>("/api/contacts").then((c) => { setItems(c); setDraft((d) => ({ ...d, escalation_order: c.length + 1 })); });
-  useEffect(() => { load(); }, []);
+  const { editedTick } = useMuse();
+  useEffect(() => { load(); }, [editedTick]);
   const { subscribe } = useApp();
   useEffect(() => subscribe((e) => { if (e.type === "contact") load(); }), [subscribe]);
   if (!items) return <Spinner />;
