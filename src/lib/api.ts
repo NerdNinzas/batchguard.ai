@@ -87,7 +87,7 @@ export type Cause = { name: string; support: string; rationale: string; evidence
 export type Report = { summary: string; severity: string; timeline: { t: string; what: string }[]; causes: Cause[]; checks: { order: number; action: string; discriminates: string; safety: string }[]; missing_data: string[]; call_script: string; cross_machine?: string | null; guardrail?: { unverified_numbers_removed: string[]; schema: string }; photo_evidence?: { id: string; caption?: string | null; description?: string; confidence?: string; safety_flags?: string[] }[] };
 export type Incident = {
   id: string; org_id: string; machine_id: string; severity: string; status: string; title: string; opened_at: number; acknowledged_at?: number | null;
-  acknowledged_by?: string | null; resolved_at?: number | null; signals: Signal[]; report: Report | null; report_source?: string | null;
+  acknowledged_by?: string | null; resolved_at?: number | null; resolved_reason?: string | null; signals: Signal[]; report: Report | null; report_source?: string | null;
   feedback?: { verdict: string; actual_cause: string; fix: string } | null; escalation_level: number; machine?: { name: string; device_id: string; type: string };
   runs?: { id: string; source: string; ok: number; error?: string | null; started_at: number; finished_at?: number | null; tool_calls: { tool: string; stage?: string; args: Record<string, unknown> }[] }[];
   chat?: { id: string; role: string; text: string; ts: number }[];

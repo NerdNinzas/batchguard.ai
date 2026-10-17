@@ -13,6 +13,7 @@ export type SimMachine = {
   id: string; name: string; type: string; device_id: string; location: string;
   params: Param[];
   values: Record<string, number>;
+  clean: Record<string, number>;      // noise-free state the physics acts on
   controls: Record<string, Control>;
   running: boolean;           // false → stops posting (sensor/gateway dropout → BatchGuard marks it stale)
   speed: number;              // production speed factor 0.2–1.5 (affects throughput-ish parameters)
@@ -57,7 +58,7 @@ export const PRESETS: FaultPreset[] = [
 function ramp(m: SimMachine, names: string[], target: (p: Param) => number, seconds: number) {
   for (const p of m.params) {
     if (!names.includes(p.name)) continue;
-    m.controls[p.name] = { target: target(p), ramp_s: seconds, started_at: now(), from: m.values[p.name] ?? mid(p) };
+    m.controls[p.name] = { target: target(p), ramp_s: seconds, started_at: now(), from: m.clean[p.name] ?? mid(p) };
   }
 }
 
@@ -99,8 +100,8 @@ class Engine {
       if (!m.verified) continue;
       const prev = known.get(m.id);
       if (prev) { prev.params = m.parameters; prev.name = m.name; next.push(prev); continue; }
-      const sm: SimMachine = { id: m.id, name: m.name, type: m.type, device_id: m.device_id, location: m.location, params: m.parameters, values: {}, controls: {}, running: true, speed: 1, fault: null, key: null, counters: {} };
-      for (const p of m.parameters) sm.values[p.name] = mid(p);
+      const sm: SimMachine = { id: m.id, name: m.name, type: m.type, device_id: m.device_id, location: m.location, params: m.parameters, values: {}, clean: {}, controls: {}, running: true, speed: 1, fault: null, key: null, counters: {} };
+      for (const p of m.parameters) { sm.clean[p.name] = mid(p); sm.values[p.name] = mid(p); }
       try {
         const k = await this.api<{ api_key: string }>(`/api/machines/${m.id}/rotate-key`, { method: "POST" });
         sm.key = k.api_key;
@@ -127,20 +128,20 @@ class Engine {
     const t = now();
     for (const p of m.params) {
       const base = mid(p);
-      let v = m.values[p.name] ?? base;
+      let v = m.clean[p.name] ?? base;
       const c = m.controls[p.name];
       if (c) {
         const f = Math.min(1, (t - c.started_at) / Math.max(1, c.ramp_s));
-        const eased = f < 1 ? c.from + (c.target - c.from) * (1 - Math.pow(1 - f, 2)) : c.target;
-        v = eased;
+        v = f < 1 ? c.from + (c.target - c.from) * (1 - Math.pow(1 - f, 2)) : c.target;
       } else {
-        v += (base - v) * 0.15; // relax toward baseline
+        v += (base - v) * 0.15; // relax toward baseline (noise-free, so the relax never random-walks)
       }
       if (p.name === "items_packed") { m.counters.items = (m.counters.items ?? 0) + (m.running ? Math.round(1 * m.speed) : 0); v = m.counters.items; }
       else if (p.name === "belt_speed" && !c) v = base * m.speed;
       else if (p.name === "feed_rate" && !c) v = base * m.speed;
       else if (p.name === "cycle_time" && !c) v = base / Math.max(0.2, m.speed);
-      m.values[p.name] = v + gauss(noiseOf(p)) * (p.name === "items_packed" ? 0 : 1);
+      m.clean[p.name] = v;
+      m.values[p.name] = p.name === "items_packed" ? v : v + gauss(noiseOf(p)); // independent sensor noise per reading
     }
   }
 
@@ -173,7 +174,7 @@ class Engine {
   get(id: string) { const m = this.machines.find((x) => x.id === id); if (!m) throw new Error("machine not found"); return m; }
   setTarget(id: string, parameter: string, target: number, ramp_s = 30) {
     const m = this.get(id); const p = m.params.find((x) => x.name === parameter); if (!p) throw new Error("parameter not found");
-    m.controls[parameter] = { target, ramp_s: Math.max(1, ramp_s), started_at: now(), from: m.values[parameter] ?? mid(p) };
+    m.controls[parameter] = { target, ramp_s: Math.max(1, ramp_s), started_at: now(), from: m.clean[parameter] ?? mid(p) };
     m.fault = "manual";
     this.push(`${m.name} · ${parameter} → ${target}${p.unit ? " " + p.unit : ""} over ${ramp_s}s`, "blue");
   }
@@ -215,7 +216,7 @@ class Engine {
     return {
       connected: this.connected, backend: BG, dashboard: process.env.NEXT_PUBLIC_DASHBOARD_URL || "http://localhost:3000", posts: this.posts, posts_per_min: this.postsLastMin.length,
       uptime_s: Math.round(now() - this.startedAt), error: this.lastError, presets: PRESETS.map(({ key, label, types, description }) => ({ key, label, types, description })),
-      machines: this.machines.map((m) => ({ id: m.id, name: m.name, type: m.type, device_id: m.device_id, location: m.location, params: m.params, values: m.values, controls: m.controls, running: m.running, speed: m.speed, fault: m.fault, has_key: !!m.key, last_post: m.last_post })),
+      machines: this.machines.map((m) => ({ id: m.id, name: m.name, type: m.type, device_id: m.device_id, location: m.location, params: m.params, values: m.values, clean: m.clean, controls: m.controls, running: m.running, speed: m.speed, fault: m.fault, has_key: !!m.key, last_post: m.last_post })),
       log: this.log.slice(0, 40),
     };
   }

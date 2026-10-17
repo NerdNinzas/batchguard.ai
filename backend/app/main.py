@@ -21,6 +21,7 @@ async def _sweeper() -> None:
         try:
             await asyncio.to_thread(incidents.staleness_sweep)
             await asyncio.to_thread(incidents.escalation_sweep)
+            await asyncio.to_thread(incidents.recovery_sweep)
             if tick % 3 == 0:  # every 15 s: pull outcomes of voice calls still in flight
                 await asyncio.to_thread(voice_calls.poll_pending)
         except Exception as e:  # noqa: BLE001

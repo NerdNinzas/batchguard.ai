@@ -42,7 +42,7 @@ function IncidentRow({ i }: { i: Incident }) {
                 <p className="text-xs text-muted">{i.machine?.name} · {fmtAgo(i.opened_at)} · {i.signals.length} signal(s){i.report ? ` · top cause: ${i.report.causes[0]?.name} (${i.report.causes[0]?.support})` : " · investigating…"}</p>
               </div>
               <Badge tone={statusTone(i.severity)}>{i.severity}</Badge>
-              <Badge tone={statusTone(i.status)}>{i.status}</Badge>
+              <Badge tone={statusTone(i.status)}>{i.status === "resolved" && i.resolved_reason === "back to normal" ? "resolved · back to normal" : i.status}</Badge>
     </Link>
   );
 }

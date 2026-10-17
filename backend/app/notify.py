@@ -117,7 +117,9 @@ def on_report_ready(inc: dict[str, Any], m: dict[str, Any], report: dict[str, An
 def on_incident_resolved(inc: dict[str, Any], m: dict[str, Any], feedback: dict[str, Any] | None) -> None:
     contacts = _contacts(inc["org_id"])
     primary = contacts[0] if contacts else None
-    _record(inc["org_id"], inc["id"], "in_app", None, f"Resolved: {inc['title']}", (feedback or {}).get("actual_cause") or "closed", "delivered")
+    auto = (feedback or {}).get("verdict") == "auto"
+    _record(inc["org_id"], inc["id"], "in_app", None, f"Back to normal: {m.get('name')}" if auto else f"Resolved: {inc['title']}",
+            f"{inc['title']} — parameters returned to normal; incident closed automatically" if auto else ((feedback or {}).get("actual_cause") or "closed"), "delivered")
     if primary and primary.get("email") and (feedback or {}).get("verdict") != "auto":
         subj, html_body = mail.incident_resolved(inc, m, feedback)
         _record(inc["org_id"], inc["id"], "email", primary, subj, "resolved", send_email(primary["email"], subj, html_body))

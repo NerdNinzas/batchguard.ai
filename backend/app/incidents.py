@@ -79,8 +79,8 @@ def handle_signals(machine_id: str, signals: list[Signal]) -> None:
         title = f"{m['name']}: {worst.parameter} {worst.layer} {worst.severity}"
         with tx() as c:
             c.execute(
-                "INSERT INTO incidents (id, org_id, machine_id, severity, status, title, opened_at, signals) VALUES (?,?,?,?,?,?,?,?)",
-                (inc_id, m["org_id"], machine_id, worst.severity, "open", title, t, j(sigs)),
+                "INSERT INTO incidents (id, org_id, machine_id, severity, status, title, opened_at, signals, last_abnormal_at) VALUES (?,?,?,?,?,?,?,?,?)",
+                (inc_id, m["org_id"], machine_id, worst.severity, "open", title, t, j(sigs), t),
             )
         inc = row(conn().execute("SELECT * FROM incidents WHERE id=?", (inc_id,)).fetchone())
         _update_machine_status(machine_id)
@@ -90,7 +90,11 @@ def handle_signals(machine_id: str, signals: list[Signal]) -> None:
         _kick_agent(inc_id)
         return
 
-    # attach to the open incident
+    # attach to the open incident; warning+ signals mean the machine is still abnormal (even inside the cooldown).
+    # info-level anomalies (z-score blips while the value settles) must not keep the incident alive.
+    if any(s.severity != "info" for s in signals):
+        with tx() as c:
+            c.execute("UPDATE incidents SET last_abnormal_at=? WHERE id=?", (t, inc["id"]))
     existing = uj(inc["signals"], [])
     new_sigs = [s for s in signals if not _recent_signal(inc, s, t)]
     if not new_sigs:
@@ -134,14 +138,14 @@ def acknowledge(incident_id: str, by: str) -> dict[str, Any]:
     return inc or {}
 
 
-def resolve(incident_id: str, feedback: dict[str, Any] | None) -> dict[str, Any]:
+def resolve(incident_id: str, feedback: dict[str, Any] | None, reason: str | None = None) -> dict[str, Any]:
     inc = row(conn().execute("SELECT * FROM incidents WHERE id=?", (incident_id,)).fetchone())
     if not inc:
         return {}
     with tx() as c:
         c.execute(
-            "UPDATE incidents SET status='resolved', resolved_at=?, feedback=? WHERE id=?",
-            (now(), j(feedback or {}), incident_id),
+            "UPDATE incidents SET status='resolved', resolved_at=?, feedback=?, resolved_reason=? WHERE id=?",
+            (now(), j(feedback or {}), reason or (feedback or {}).get("source") or "manual", incident_id),
         )
         c.execute("UPDATE latest SET state='normal' WHERE machine_id=?", (inc["machine_id"],))
     _update_machine_status(inc["machine_id"])
@@ -177,6 +181,30 @@ def escalation_sweep() -> None:
         m = _machine(inc["machine_id"])
         bus.publish(inc["org_id"], "incident", {**inc, "signals": uj(inc["signals"], [])})
         notify.on_incident_escalated(inc, m, level=level)
+
+
+RECOVERY_SECONDS = 60
+
+
+def recovery_sweep() -> None:
+    """A machine whose parameters have all been back inside their normal band for RECOVERY_SECONDS closes its
+    incident as 'back to normal' — the report and timeline stay for the record."""
+    t = now()
+    for inc in rows(conn().execute("SELECT * FROM incidents WHERE status IN ('open','acknowledged')").fetchall()):
+        sigs = uj(inc["signals"], [])
+        if sigs and all(s.get("layer") == "stale" for s in sigs):
+            continue  # stale-only incidents are closed by resume_from_stale
+        last_abnormal = inc.get("last_abnormal_at") or max([s.get("ts", inc["opened_at"]) for s in sigs] or [inc["opened_at"]])
+        if t - last_abnormal < RECOVERY_SECONDS:
+            continue
+        states = [r["state"] for r in conn().execute("SELECT state, ts FROM latest WHERE machine_id=?", (inc["machine_id"],)).fetchall()]
+        m = _machine(inc["machine_id"])
+        if not states or any(st != "normal" for st in states) or m.get("status") in ("stale", "offline"):
+            continue
+        if (m.get("last_seen") or 0) < t - 15:
+            continue  # not receiving data → cannot claim recovery
+        mins = max(1, int((t - inc["opened_at"]) / 60))
+        resolve(inc["id"], {"verdict": "auto", "actual_cause": "Parameters returned to their normal band", "fix": f"Recovered — back to normal after {mins} min; no manual action recorded"}, reason="back to normal")
 
 
 def resume_from_stale(machine_id: str) -> None:

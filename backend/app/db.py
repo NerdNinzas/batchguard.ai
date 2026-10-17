@@ -155,6 +155,11 @@ def init_db() -> None:
     cols = {r["name"] for r in c.execute("PRAGMA table_info(latest)").fetchall()}
     if "forecast" not in cols:
         c.execute("ALTER TABLE latest ADD COLUMN forecast TEXT")
+    icols = {r["name"] for r in c.execute("PRAGMA table_info(incidents)").fetchall()}
+    if "last_abnormal_at" not in icols:
+        c.execute("ALTER TABLE incidents ADD COLUMN last_abnormal_at REAL")
+    if "resolved_reason" not in icols:
+        c.execute("ALTER TABLE incidents ADD COLUMN resolved_reason TEXT")
     for r in c.execute("SELECT name FROM sqlite_master WHERE type='trigger' AND name LIKE 'trg_%'").fetchall():
         tbl = r["name"][4:-2]
         if tbl not in SYNCED:

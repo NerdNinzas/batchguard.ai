@@ -74,7 +74,7 @@ export default function IncidentPage() {
       <div data-hl={id} className={`card rounded-2xl p-5 ${hl.className}`}>
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <div className="flex flex-wrap items-center gap-2"><Badge tone={statusTone(inc.severity)}>{inc.severity}</Badge><Badge tone={statusTone(inc.status)}>{inc.status}</Badge>{inc.escalation_level > 0 && <Badge tone="red">escalation level {inc.escalation_level}</Badge>}<Badge tone="muted">{inc.id}</Badge></div>
+            <div className="flex flex-wrap items-center gap-2"><Badge tone={statusTone(inc.severity)}>{inc.severity}</Badge><Badge tone={statusTone(inc.status)}>{inc.status === "resolved" && inc.resolved_reason === "back to normal" ? "resolved · back to normal" : inc.status}</Badge>{inc.escalation_level > 0 && <Badge tone="red">escalation level {inc.escalation_level}</Badge>}<Badge tone="muted">{inc.id}</Badge></div>
             <h2 className="font-display mt-2 text-3xl font-semibold text-ink">{inc.title}</h2>
             <p className="text-sm text-muted">Opened {fmtAgo(inc.opened_at)} ({fmtTime(inc.opened_at)}) · <Link href={`/app/machines/${inc.machine_id}`} className="text-blue hover:underline">{inc.machine?.name}</Link> · {inc.machine?.device_id}{inc.acknowledged_by ? ` · acknowledged by ${inc.acknowledged_by}` : ""}</p>
           </div>
@@ -136,7 +136,8 @@ export default function IncidentPage() {
           <Spot k="agent-runs"><Card title="Agent runs">
             {(inc.runs ?? []).map((run) => <div key={run.id} className="mb-2 rounded-xl border border-line bg-white p-3 text-xs"><div className="flex items-center justify-between"><Badge tone={run.ok ? "green" : "red"}>{run.source}</Badge><span className="font-mono text-muted">{run.finished_at ? `${(run.finished_at - run.started_at).toFixed(1)}s` : "running"}</span></div>{run.tool_calls.length > 0 && <p className="mt-1 font-mono text-[10px] text-muted">{run.tool_calls.map((t) => (t.stage ? `${t.stage}·${t.tool}` : t.tool)).join(" → ")}</p>}{run.error && <p className="mt-1 text-red">{run.error.slice(0, 200)}</p>}</div>)}
           </Card></Spot>
-          {inc.feedback && <Card title="Engineer feedback"><p className="text-sm text-ink">{inc.feedback.verdict === "correct" ? <ThumbsUp size={14} className="inline text-green" /> : <ThumbsDown size={14} className="inline text-red" />} {inc.feedback.verdict}{inc.feedback.actual_cause ? ` · actual cause: ${inc.feedback.actual_cause}` : ""}{inc.feedback.fix ? ` · fix: ${inc.feedback.fix}` : ""}</p></Card>}
+          {inc.status === "resolved" && inc.resolved_reason === "back to normal" && <Card title="Back to normal"><p className="text-sm text-ink"><ThumbsUp size={14} className="inline text-green" /> The machine&apos;s parameters returned to their normal band{inc.resolved_at ? ` at ${fmtTime(inc.resolved_at)}` : ""}, so Muse closed this incident automatically. The investigation report and timeline above stay as the record.</p></Card>}
+          {inc.feedback && inc.feedback.verdict !== "auto" && <Card title="Engineer feedback"><p className="text-sm text-ink">{inc.feedback.verdict === "correct" ? <ThumbsUp size={14} className="inline text-green" /> : <ThumbsDown size={14} className="inline text-red" />} {inc.feedback.verdict}{inc.feedback.actual_cause ? ` · actual cause: ${inc.feedback.actual_cause}` : ""}{inc.feedback.fix ? ` · fix: ${inc.feedback.fix}` : ""}</p></Card>}
         </div>
       </div>
 

@@ -189,6 +189,9 @@ def system_instruction(org_id: str, user_name: str, page: str | None, voice: boo
            "When the floor is calm, you may slip in one light machine joke ('the compressor is under pressure today, haha… sorry'); never joke during a critical or emergency incident. "
            "Short spoken sentences, 2–4 per turn, conversational pauses, no lists, no markdown, never read ids aloud. React to what you hear before answering. " if voice else "Use short paragraphs; markdown bullets are fine; never print raw ids. ")
         + "FACTS: only state numbers and causes that come from the snapshot or tools — never invent. If asked something you cannot see, say so.\n"
+        "FRESHNESS: the factory changes while you talk. The snapshot below is only the state when this conversation started. Before answering any question about how things are now "
+        "(status, incidents, a machine, what to check), call get_factory_status first and speak from that result. An incident that has resolved is over — mention it once as resolved, then move on; "
+        "never keep returning to an old incident. When a live update arrives, react to it in the moment ('ah, the sealer just went critical…', 'good news, the conveyor is back to normal').\n"
         "SAFETY: you are advisory; physical work is done by qualified staff under lockout procedures.\n"
         "NAVIGATION: you can move the dashboard with the navigate tool — to any page AND to the exact spot (section) the user wants: a parameter chart, the device key, work orders, a contact, call history, email settings... "
         "When the user asks to see, open, show, find, go to or 'take me to' something, call navigate immediately with the best page + section, and keep talking while it happens "
@@ -319,6 +322,49 @@ async def live_session(org_id: str, user_name: str, page: str | None, incoming: 
                 cmd = await cmd_queue.get()
                 await send(cmd)
 
+        async def pump_factory_events() -> None:
+            """New / escalated / resolved incidents and finished reports are whispered to Muse as they happen,
+            so the conversation follows the factory instead of the state at connect time."""
+            from .. import bus as _bus
+
+            q = _bus.subscribe(org_id)
+            last_push = 0.0
+            seen: dict[str, str] = {}
+            try:
+                while True:
+                    raw = await q.get()
+                    try:
+                        ev = json.loads(raw)
+                    except json.JSONDecodeError:
+                        continue
+                    kind, d = ev.get("type"), ev.get("data") or {}
+                    note = None
+                    if kind == "incident":
+                        key = f"{d.get('id')}:{d.get('status')}:{d.get('severity')}:{'r' if d.get('report') else ''}"
+                        if seen.get(d.get("id")) == key:
+                            continue
+                        seen[d.get("id")] = key
+                        mname = (row(conn().execute("SELECT name FROM machines WHERE id=?", (d.get("machine_id"),)).fetchone()) or {}).get("name", "a machine")
+                        if d.get("status") == "resolved":
+                            note = f"{mname} is back to normal — the incident '{d.get('title')}' just resolved ({d.get('resolved_reason') or 'resolved'})."
+                        elif d.get("report"):
+                            rep = d["report"] if isinstance(d["report"], dict) else {}
+                            causes = rep.get("causes") or []
+                            checks = sorted(rep.get("checks") or [], key=lambda c: c.get("order", 99))
+                            note = f"Investigation finished for {mname}: likely cause {causes[0].get('name') if causes else 'unknown'}; first check: {checks[0].get('action') if checks else 'see dashboard'} (incident id {d.get('id')})."
+                        else:
+                            note = f"{'New' if d.get('escalation_level', 0) == 0 else 'Escalated'} {d.get('severity')} incident on {mname}: {d.get('title')} (incident id {d.get('id')}). Muse is investigating."
+                    elif kind == "voice_call" and d.get("status") in ("completed", "no_answer", "failed"):
+                        note = f"Phone call {d.get('status')}: {d.get('title')} to {d.get('contact_name') or d.get('to_number')}."
+                    if not note:
+                        continue
+                    if time.time() - last_push < 8:
+                        await asyncio.sleep(8 - (time.time() - last_push))
+                    last_push = time.time()
+                    await session.send_client_content(turns=types.Content(role="user", parts=[types.Part(text=f"(Live factory update, not spoken by the user — tell the user naturally in one or two sentences, then continue: {note})")]), turn_complete=True)
+            finally:
+                _bus.unsubscribe(org_id, q)
+
         async def from_browser() -> None:
             async for msg in incoming:
                 kind = msg.get("type")
@@ -359,7 +405,7 @@ async def live_session(org_id: str, user_name: str, page: str | None, incoming: 
                     if sc.generation_complete:
                         pass
 
-        tasks = [asyncio.create_task(from_browser()), asyncio.create_task(from_gemini()), asyncio.create_task(pump_commands())]
+        tasks = [asyncio.create_task(from_browser()), asyncio.create_task(from_gemini()), asyncio.create_task(pump_commands()), asyncio.create_task(pump_factory_events())]
         try:
             done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
             for t in done:
