@@ -47,8 +47,17 @@ def clear_session(response: Response) -> None:
     response.delete_cookie(COOKIE, path="/")
 
 
+def issue_token(user_id: str, hours: int = 12) -> str:
+    return jwt.encode({"sub": user_id, "exp": int(time.time()) + hours * 3600, "scope": "api"}, settings.auth_secret, algorithm="HS256")
+
+
 def current_user_optional(request: Request) -> dict[str, Any] | None:
     token = request.cookies.get(COOKIE)
+    auth = request.headers.get("authorization", "")
+    if auth.lower().startswith("bearer "):
+        token = auth[7:].strip()
+    if not token and request.url.path.endswith("/stream"):
+        token = request.query_params.get("token")
     if not token:
         return None
     try:

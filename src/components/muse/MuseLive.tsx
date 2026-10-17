@@ -9,7 +9,7 @@
 import { usePathname, useRouter } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useToast } from "@/components/ui/Toast";
-import { get } from "@/lib/api";
+import { apiToken, BACKEND_URL, get } from "@/lib/api";
 
 const QUIPS = ["Yesss boss! Taking you there…", "On it, boss — spotlight's on it.", "Boss, this way 👉", "Done, boss. Highlighted in yellow.", "Ekdum, boss — right here."];
 
@@ -46,8 +46,7 @@ export const useMuse = () => {
 };
 
 const uid = () => Math.random().toString(36).slice(2, 10);
-const BACKEND = (process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000").replace(/\/$/, "");
-const WS_BASE = BACKEND.replace(/^http/, "ws");
+const WS_BASE = BACKEND_URL.replace(/^http/, "ws");
 
 /* ---------- audio helpers ---------- */
 function floatToPcm16Base64(f32: Float32Array): string {
@@ -121,7 +120,8 @@ export function MuseLiveProvider({ children }: { children: ReactNode }) {
     setMessages([...history, reply]);
     setBusy(true);
     try {
-      const res = await fetch("/api/muse/chat", { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ messages: history.map((m) => ({ role: m.role, text: m.text })), page: pathRef.current }) });
+      const token = await apiToken().catch(() => "");
+      const res = await fetch(token ? `${BACKEND_URL}/api/muse/chat` : "/api/muse/chat", { method: "POST", credentials: token ? "omit" : "include", headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body: JSON.stringify({ messages: history.map((m) => ({ role: m.role, text: m.text })), page: pathRef.current }) });
       if (!res.ok || !res.body) throw new Error(`Muse is unavailable (${res.status})`);
       const reader = res.body.getReader();
       const dec = new TextDecoder();

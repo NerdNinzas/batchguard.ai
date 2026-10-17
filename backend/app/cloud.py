@@ -12,7 +12,7 @@ import json
 import logging
 import threading
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from .config import settings
@@ -202,6 +202,192 @@ def download_blob(gcs_uri: str) -> bytes | None:
     except Exception as e:  # noqa: BLE001
         print("gcs download failed:", e)
         return None
+
+
+# ---------------------------------------------------------------- Firestore as the system of record
+# Row changes captured by SQLite triggers (db.SYNCED) are coalesced here and written to Firestore every
+# few seconds; readings are batched into 10-second documents; on start, `hydrate()` rebuilds the local
+# SQLite copy from Firestore so a fresh Cloud Run container carries on exactly where the last one stopped.
+
+import time as _time
+
+_pending: dict[tuple[str, str], str] = {}  # (table, key) -> 'U' | 'D'
+_pending_lock = threading.Lock()
+_last_flush_key: dict[tuple[str, str], float] = {}
+SLOW_TABLES = {"latest", "machines"}  # change every second; flushed at most every 15 s per row
+_reading_buf: dict[str, list[dict[str, Any]]] = {}
+_sync_thread: threading.Thread | None = None
+_stop = threading.Event()
+READING_BUCKET = 10
+READING_RETENTION_S = 3600
+
+
+def enqueue_changes(changes: list[tuple[str, str, str]]) -> None:
+    if not enabled():
+        return
+    with _pending_lock:
+        for tbl, key, op in changes:
+            _pending[(tbl, key)] = op
+
+
+def buffer_readings(machine_id: str, rows_: list[dict[str, Any]]) -> None:
+    if not enabled() or not rows_:
+        return
+    with _pending_lock:
+        _reading_buf.setdefault(machine_id, []).extend(rows_)
+
+
+def _doc_data(r: dict[str, Any]) -> dict[str, Any]:
+    return {**_clean(r), "_mirrored_at": datetime.now(timezone.utc)}
+
+
+def flush_sync(force: bool = False) -> int:
+    """Write coalesced row changes + reading batches to Firestore. Returns number of writes."""
+    if not enabled():
+        return 0
+    from .db import SYNCED, row_by_key
+
+    db = _client("firestore")
+    if db is None:
+        return 0
+    now_t = _time.time()
+    with _pending_lock:
+        items = list(_pending.items())
+        take = []
+        for (tbl, key), op in items:
+            if not force and tbl in SLOW_TABLES and op == "U" and now_t - _last_flush_key.get((tbl, key), 0) < 15:
+                continue
+            take.append(((tbl, key), op))
+            _pending.pop((tbl, key), None)
+            _last_flush_key[(tbl, key)] = now_t
+        readings = {k: v for k, v in _reading_buf.items() if v}
+        _reading_buf.clear()
+    n = 0
+    batch = db.batch()
+    for (tbl, key), op in take:
+        if tbl not in SYNCED:
+            continue
+        ref = db.collection(tbl).document(str(key))
+        if op == "D":
+            batch.delete(ref)
+        else:
+            r = row_by_key(tbl, key)
+            if r is None:
+                batch.delete(ref)
+            else:
+                batch.set(ref, _doc_data(r), merge=False)
+        n += 1
+        if n % 400 == 0:
+            batch.commit(); batch = db.batch()
+    for mid, rs in readings.items():
+        bucket = int(rs[-1]["ts"] // READING_BUCKET) * READING_BUCKET
+        ref = db.collection("reading_batches").document(f"{mid}__{bucket}")
+        batch.set(ref, {"machine_id": mid, "bucket": bucket, "rows": rs[-600:], "expires_at": datetime.now(timezone.utc) + timedelta(hours=2)}, merge=False)
+        n += 1
+        if n % 400 == 0:
+            batch.commit(); batch = db.batch()
+    if n:
+        batch.commit()
+    return n
+
+
+def _sync_loop() -> None:
+    while not _stop.is_set():
+        try:
+            flush_sync()
+        except Exception as e:  # noqa: BLE001
+            log.warning("firestore sync failed: %s", e)
+        _stop.wait(5)
+
+
+def start_sync() -> None:
+    global _sync_thread
+    if not enabled() or _sync_thread:
+        return
+    _stop.clear()
+    _sync_thread = threading.Thread(target=_sync_loop, name="firestore-sync", daemon=True)
+    _sync_thread.start()
+
+
+def stop_sync() -> None:
+    _stop.set()
+    try:
+        flush_sync(force=True)
+    except Exception as e:  # noqa: BLE001
+        log.warning("final firestore flush failed: %s", e)
+
+
+def _sqlite_value(v: Any) -> Any:
+    if isinstance(v, (dict, list)):
+        return json.dumps(v, default=str)
+    if isinstance(v, datetime):
+        return v.timestamp()
+    if isinstance(v, bool):
+        return int(v)
+    return v
+
+
+def hydrate() -> dict[str, int]:
+    """Rebuild the local SQLite copy from Firestore (rows + the last hour of readings)."""
+    if not enabled():
+        return {}
+    from .db import SYNCED, table_columns, tx
+
+    db = _client("firestore")
+    if db is None:
+        return {}
+    counts: dict[str, int] = {}
+    from .db import conn as _conn
+
+    for tbl in SYNCED:
+        info = _conn().execute(f"PRAGMA table_info({tbl})").fetchall()
+        cols = {r["name"] for r in info}
+        required = {r["name"] for r in info if r["notnull"] and r["dflt_value"] is None and not r["pk"]}
+        pk_expr = SYNCED[tbl]
+        docs = list(db.collection(tbl).stream())
+        if not docs:
+            continue
+        n = 0
+        with tx(sync=False) as c:
+            for d in docs:
+                data = {k: _sqlite_value(v) for k, v in d.to_dict().items() if k in cols}
+                if not data:
+                    continue
+                if "||" in pk_expr:
+                    where, args = "machine_id=? AND parameter=?", (data.get("machine_id"), data.get("parameter"))
+                else:
+                    where, args = f"{pk_expr}=?", (data.get(pk_expr) or d.id,)
+                    data.setdefault(pk_expr, d.id)
+                exists = c.execute(f"SELECT 1 FROM {tbl} WHERE {where}", args).fetchone()
+                if exists:
+                    sets = [k for k in data if k not in ("id",)]
+                    if sets:
+                        c.execute(f"UPDATE {tbl} SET {', '.join(f'{k}=?' for k in sets)} WHERE {where}", [data[k] for k in sets] + list(args))
+                elif required <= set(data):
+                    keys = list(data)
+                    c.execute(f"INSERT INTO {tbl} ({', '.join(keys)}) VALUES ({', '.join('?' * len(keys))})", [data[k] for k in keys])
+                else:
+                    continue  # a partial legacy mirror doc for a row we no longer have; the next write-through replaces it
+                n += 1
+        counts[tbl] = n
+    try:
+        since = _time.time() - READING_RETENTION_S
+        q = db.collection("reading_batches").where("bucket", ">=", since)
+        n = 0
+        with tx(sync=False) as c:
+            for d in q.stream():
+                doc = d.to_dict()
+                for r in doc.get("rows", []):
+                    if c.execute("SELECT 1 FROM readings WHERE machine_id=? AND parameter=? AND ts=?", (doc["machine_id"], r["parameter"], r["ts"])).fetchone():
+                        continue
+                    c.execute("INSERT INTO readings (machine_id, parameter, value, unit, ts, received_at, reading_id) VALUES (?,?,?,?,?,?,?)",
+                              (doc["machine_id"], r["parameter"], r["value"], r.get("unit"), r["ts"], r.get("received_at", r["ts"]), r.get("reading_id")))
+                    n += 1
+        counts["readings"] = n
+    except Exception as e:  # noqa: BLE001
+        log.warning("reading hydrate failed: %s", e)
+    log.info("hydrated from firestore: %s", counts)
+    return counts
 
 
 def setup_logging() -> bool:

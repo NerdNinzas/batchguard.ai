@@ -1,0 +1,13 @@
+{
+  "hosting": {
+    "site": "batchguard",
+    "public": "public/hosting",
+    "ignore": ["**/.*"],
+    "rewrites": [
+      { "source": "**", "run": { "serviceId": "batchguard-frontend", "region": "asia-southeast1" } }
+    ],
+    "headers": [
+      { "source": "**", "headers": [{ "key": "Cache-Control", "value": "no-cache" }] }
+    ]
+  }
+}

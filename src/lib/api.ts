@@ -34,6 +34,18 @@ export async function api<T = unknown>(path: string, init: RequestInit & { json?
   return res.json();
 }
 
+/* ---------- direct backend access (streaming endpoints bypass the hosting/Next proxy) ---------- */
+export const BACKEND_URL = (process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000").replace(/\/$/, "");
+let _tok: { token: string; exp: number } | null = null;
+/** Short-lived bearer token for calling the backend origin directly (cached, refreshed before expiry). */
+export async function apiToken(): Promise<string> {
+  if (_tok && _tok.exp > Date.now() + 60_000) return _tok.token;
+  const r = await api<{ token: string; expires_in: number }>("/api/auth/token");
+  _tok = { token: r.token, exp: Date.now() + r.expires_in * 1000 };
+  return r.token;
+}
+export const clearApiToken = () => { _tok = null; };
+
 export const get = <T,>(p: string) => api<T>(p);
 export const post = <T,>(p: string, json?: unknown) => api<T>(p, { method: "POST", json });
 export const put = <T,>(p: string, json?: unknown) => api<T>(p, { method: "PUT", json });
@@ -122,15 +134,25 @@ export function useLive(onEvent: (e: LiveEvent) => void, enabled = true) {
   });
   useEffect(() => {
     if (!enabled) return;
-    const es = new EventSource("/api/stream", { withCredentials: true });
-    es.onopen = () => setConnected(true);
-    es.onerror = () => setConnected(false);
-    es.onmessage = (m) => {
-      try {
-        cb.current(JSON.parse(m.data));
-      } catch {}
-    };
-    return () => es.close();
+    let es: EventSource | null = null;
+    let closed = false;
+    // connect straight to the backend with a token (works through Firebase Hosting, which buffers proxied streams)
+    apiToken()
+      .then((t) => {
+        if (closed) return;
+        es = new EventSource(`${BACKEND_URL}/api/stream?token=${encodeURIComponent(t)}`);
+        es.onopen = () => setConnected(true);
+        es.onerror = () => setConnected(false);
+        es.onmessage = (m) => { try { cb.current(JSON.parse(m.data)); } catch {} };
+      })
+      .catch(() => {
+        if (closed) return;
+        es = new EventSource("/api/stream", { withCredentials: true });
+        es.onopen = () => setConnected(true);
+        es.onerror = () => setConnected(false);
+        es.onmessage = (m) => { try { cb.current(JSON.parse(m.data)); } catch {} };
+      });
+    return () => { closed = true; es?.close(); };
   }, [enabled]);
   return connected;
 }

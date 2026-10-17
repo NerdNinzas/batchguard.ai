@@ -74,6 +74,14 @@ def google(body: GoogleIn, response: Response) -> dict[str, Any]:
     return _public(u)
 
 
+@router.get("/token")
+def api_token(user: dict[str, Any] = Depends(current_user)) -> dict[str, Any]:
+    """Short-lived bearer token so the browser can talk to the backend origin directly (SSE/streaming bypass the hosting proxy)."""
+    from ..auth import issue_token
+
+    return {"token": issue_token(user["id"]), "expires_in": 12 * 3600}
+
+
 @router.post("/logout")
 def logout(response: Response) -> dict[str, bool]:
     clear_session(response)

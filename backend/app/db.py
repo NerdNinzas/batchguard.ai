@@ -110,7 +110,30 @@ CREATE TABLE IF NOT EXISTS work_orders (
   position INTEGER NOT NULL DEFAULT 0, created_by TEXT, created_at REAL NOT NULL, updated_at REAL NOT NULL, done_at REAL
 );
 CREATE INDEX IF NOT EXISTS idx_work_orders_machine ON work_orders(machine_id, status);
+CREATE TABLE IF NOT EXISTS _changes (
+  seq INTEGER PRIMARY KEY AUTOINCREMENT, tbl TEXT NOT NULL, key TEXT NOT NULL, op TEXT NOT NULL
+);
 """
+
+# Tables whose rows live in Firestore (system of record). SQLite is the local working copy:
+# every change is captured by triggers and written through; on start the copy is rebuilt from Firestore.
+SYNCED: dict[str, str] = {
+    "users": "id", "orgs": "id", "contacts": "id", "lines": "id", "machines": "id", "parameters": "id",
+    "latest": "machine_id || '__' || parameter", "events": "id", "incidents": "id", "notifications": "id",
+    "workflows": "org_id", "agent_runs": "id", "chat": "id", "voice_settings": "org_id", "voice_calls": "id",
+    "evidence": "id", "work_orders": "id",
+}
+
+
+def _trigger_sql() -> str:
+    out = []
+    for tbl, key in SYNCED.items():
+        new_key = key.replace("machine_id", "NEW.machine_id").replace("parameter", "NEW.parameter") if "||" in key else f"NEW.{key}"
+        old_key = key.replace("machine_id", "OLD.machine_id").replace("parameter", "OLD.parameter") if "||" in key else f"OLD.{key}"
+        out.append(f"CREATE TRIGGER IF NOT EXISTS trg_{tbl}_i AFTER INSERT ON {tbl} BEGIN INSERT INTO _changes (tbl, key, op) VALUES ('{tbl}', {new_key}, 'U'); END;")
+        out.append(f"CREATE TRIGGER IF NOT EXISTS trg_{tbl}_u AFTER UPDATE ON {tbl} BEGIN INSERT INTO _changes (tbl, key, op) VALUES ('{tbl}', {new_key}, 'U'); END;")
+        out.append(f"CREATE TRIGGER IF NOT EXISTS trg_{tbl}_d AFTER DELETE ON {tbl} BEGIN INSERT INTO _changes (tbl, key, op) VALUES ('{tbl}', {old_key}, 'D'); END;")
+    return "\n".join(out)
 
 
 def _connect() -> sqlite3.Connection:
@@ -133,6 +156,8 @@ def init_db() -> None:
     cols = {r["name"] for r in c.execute("PRAGMA table_info(latest)").fetchall()}
     if "forecast" not in cols:
         c.execute("ALTER TABLE latest ADD COLUMN forecast TEXT")
+    c.executescript(_trigger_sql())
+    c.execute("DELETE FROM _changes")
     c.commit()
 
 
@@ -148,16 +173,37 @@ def conn() -> sqlite3.Connection:
 
 
 @contextmanager
-def tx() -> Iterator[sqlite3.Connection]:
-    """Serialised write transaction."""
+def tx(sync: bool = True) -> Iterator[sqlite3.Connection]:
+    """Serialised write transaction. Changed rows (captured by triggers) are handed to the Firestore
+    write-through queue after commit; `sync=False` is used while hydrating from Firestore."""
     with _lock:
         c = conn()
         try:
             yield c
+            changes = [(r["tbl"], r["key"], r["op"]) for r in c.execute("SELECT tbl, key, op FROM _changes ORDER BY seq").fetchall()]
+            if changes:
+                c.execute("DELETE FROM _changes")
             c.commit()
         except Exception:
             c.rollback()
             raise
+    if sync and changes:
+        from . import cloud
+
+        cloud.enqueue_changes(changes)
+
+
+def row_by_key(tbl: str, key: str) -> dict[str, Any] | None:
+    """Fetch a synced row by its sync key (see SYNCED)."""
+    expr = SYNCED[tbl]
+    if "||" in expr:
+        mid, _, param = key.partition("__")
+        return row(conn().execute(f"SELECT * FROM {tbl} WHERE machine_id=? AND parameter=?", (mid, param)).fetchone())
+    return row(conn().execute(f"SELECT * FROM {tbl} WHERE {expr}=?", (key,)).fetchone())
+
+
+def table_columns(tbl: str) -> list[str]:
+    return [r["name"] for r in conn().execute(f"PRAGMA table_info({tbl})").fetchall()]
 
 
 def get_db() -> sqlite3.Connection:

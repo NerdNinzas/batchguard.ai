@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=BASE_DIR / ".env", extra="ignore")
 
     app_url: str = "http://localhost:3000"
+    cors_origins: str = ""  # comma-separated extra browser origins (hosting URL etc.)
     auth_secret: str = "dev-secret-change-me"
     database_path: str = "../data/batchguard.db"
     upload_dir: str = "../data/uploads"
@@ -54,6 +55,11 @@ class Settings(BaseSettings):
     escalation_timeout_seconds: int = 120
     trend_window_seconds: int = 60
     demo_mode: bool = True
+
+    @property
+    def cors_origin_list(self) -> list[str]:
+        base = [self.app_url, "http://localhost:3000", "http://localhost:3001"]
+        return base + [o.strip() for o in self.cors_origins.split(",") if o.strip()]
 
     @property
     def db_file(self) -> Path:
