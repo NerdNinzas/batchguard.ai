@@ -91,6 +91,28 @@ class Engine {
     this.cookie = set.split(";")[0];
     this.connected = true;
   }
+  async issueKey(m: SimMachine) {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const k = await this.api<{ api_key: string }>(`/api/machines/${m.id}/rotate-key`, { method: "POST" });
+        m.key = k.api_key;
+        if (attempt) this.push(`${m.name}: new device key issued`, "green");
+        return;
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        if (msg.includes("401") && attempt === 0) { try { await this.login(); continue; } catch { /* fall through */ } }
+        this.push(`${m.name}: could not obtain a device key (${msg})`, "red");
+        return;
+      }
+    }
+  }
+  private reissueAt = 0;
+  async reissueKeys() {
+    if (now() - this.reissueAt < 15) return;
+    this.reissueAt = now();
+    try { await this.login(); } catch { /* keep the old cookie */ }
+    await this.loadMachines();
+  }
   async loadMachines() {
     type M = { id: string; name: string; type: string; device_id: string; location: string; verified: number; parameters: Param[] };
     const list = await this.api<M[]>("/api/machines");
@@ -99,13 +121,15 @@ class Engine {
     for (const m of list) {
       if (!m.verified) continue;
       const prev = known.get(m.id);
-      if (prev) { prev.params = m.parameters; prev.name = m.name; next.push(prev); continue; }
+      if (prev) {
+        prev.params = m.parameters; prev.name = m.name;
+        if (!prev.key) await this.issueKey(prev);
+        next.push(prev);
+        continue;
+      }
       const sm: SimMachine = { id: m.id, name: m.name, type: m.type, device_id: m.device_id, location: m.location, params: m.parameters, values: {}, clean: {}, controls: {}, running: true, speed: 1, fault: null, key: null, counters: {} };
       for (const p of m.parameters) { sm.clean[p.name] = mid(p); sm.values[p.name] = mid(p); }
-      try {
-        const k = await this.api<{ api_key: string }>(`/api/machines/${m.id}/rotate-key`, { method: "POST" });
-        sm.key = k.api_key;
-      } catch (e) { this.push(`${m.name}: could not obtain a device key (${e instanceof Error ? e.message : e})`, "red"); }
+      await this.issueKey(sm);
       next.push(sm);
       this.push(`${m.name} connected (${m.device_id})`, "green");
     }
@@ -152,7 +176,7 @@ class Engine {
     try {
       const res = await fetch(`${BG}/v1/telemetry`, { method: "POST", headers: { "Content-Type": "application/json", "X-Device-Key": m.key }, body: JSON.stringify({ device_id: m.device_id, readings }) });
       const ms = Date.now() - t0;
-      if (!res.ok) { m.last_post = { ok: false, ms, at: now(), signals: 0, error: `${res.status}` }; if (res.status === 401) { m.key = null; this.push(`${m.name}: key rejected, re-issuing…`, "amber"); this.loadMachines().catch(() => {}); } return; }
+      if (!res.ok) { m.last_post = { ok: false, ms, at: now(), signals: 0, error: `${res.status}` }; if (res.status === 401) { m.key = null; this.push(`${m.name}: key rejected, re-issuing…`, "amber"); this.reissueKeys().catch(() => {}); } return; }
       const body = (await res.json()) as { signals?: { layer: string; severity: string; message: string }[] };
       const sig = body.signals ?? [];
       m.last_post = { ok: true, ms, at: now(), signals: sig.length };
@@ -166,6 +190,7 @@ class Engine {
 
   async tick() {
     if (!this.connected) return;
+    if (this.machines.some((m) => !m.key)) this.reissueKeys().catch(() => {});
     this.postsLastMin = this.postsLastMin.filter((t) => now() - t < 60);
     await Promise.all(this.machines.map(async (m) => { this.step(m); if (m.running) await this.post(m); }));
   }
