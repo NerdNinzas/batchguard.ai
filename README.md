@@ -1,142 +1,167 @@
 # BatchGuard AI
 
-Factory monitoring with an investigating AI agent — our entry to the Google Cloud AI Builder Cup 2026 (Manufacturing).
-Onboard a machine from its PDF manual, stream telemetry through a per-machine API, and let **Muse** (the agent, on
-Google ADK + Gemini) detect problems, explain the likely cause with evidence, and escalate.
+Factory monitoring with an investigating AI agent. Onboard a machine from its PDF manual, stream telemetry through a per-machine API, and let **Muse** detect problems, explain the likely cause with evidence, phone the right person, and talk to you about your factory in realtime.
 
-Two parts in this repo:
+Built for the **Google Cloud AI Builder Cup 2026 · Manufacturing** theme on Google ADK, Gemini 2.5, Gemini Live, Cloud Run, Firestore, Pub/Sub, BigQuery and Cloud Storage.
 
-- **Frontend** (this folder) — Next.js 16: landing page, auth, Muse-guided onboarding, dashboard (machines, PDF/manual
-  onboarding with verification, workflow node builder, live 3D factory, telemetry, incidents, observability, contacts, settings).
-- **Backend** (`backend/`) — FastAPI + Google ADK: auth, orgs, machine specs + device keys, `/v1/telemetry` ingestion,
-  deterministic detection (limits · trend · anomaly · staleness), incident lifecycle + escalation, the investigation agent
-  (Gemini via ADK, rule-based fallback), email notifications, SSE live stream. See `backend/README.md`.
+- **Live demo:** https://batchguard-frontend-6our3ivvha-as.a.run.app — sign in with `demo@batchguard.ai` / `demo1234`
+- **The idea and the problem:** [IDEA.md](IDEA.md)
+- **How it is built, end to end:** [SOLUTION.md](SOLUTION.md)
 
-## Run
+---
+
+## What you get
+
+| Area | Highlights |
+|---|---|
+| Onboarding | PDF manual → Gemini extracts parameters, limits and knowledge with page citations → you verify → device key + code samples |
+| Detection | Limits, trend (time-to-limit), anomaly (z-score vs own baseline), staleness; runs on every reading without an LLM |
+| Forecast | Predicted time to warning / critical per parameter, on machine cards and charts |
+| Investigation | Google ADK pipeline (parallel evidence gathering → hypotheses → evaluation → checks → report) with a number guardrail |
+| Escalation | Dashboard → email (Resend, Muse templates) → voice call (Gemini Live over TeleCMI via Dograh) → next contact until acknowledged |
+| Action | Photo evidence read by Gemini vision, work-order Kanban per machine, feedback loop on resolution |
+| Muse copilot | ChatGPT-style streaming chat, realtime Indian-English voice, and voice/chat navigation that spotlights any part of the dashboard |
+| Visibility | Live 3D factory, workflow node builder, telemetry table, observability, blind evaluation scoreboard |
+
+---
+
+## Repository layout
+
+```
+batchguard/
+├── src/                      Next.js 16 frontend
+│   ├── app/                  landing, login/signup, onboarding, /app/* dashboard pages
+│   ├── components/app/       Shell (sidebar, notifications), charts, WorkOrders, PhotoEvidence, KeyReveal
+│   ├── components/muse/      MuseLive (chat + voice runtime), MuseConsole (Ask Muse), MuseChip/Guide/Face
+│   ├── components/three/     3D factory (R3F), Muse character, HUD
+│   └── lib/                  api.ts (typed client, SSE hook), firebase.ts, machineTypes.ts
+├── backend/                  FastAPI + Google ADK (Python 3.12)
+│   ├── app/main.py           app, lifespan (sweepers, demo producer), routers
+│   ├── app/detection.py      limits / trend / anomaly / forecast
+│   ├── app/ingest.py         shared ingestion path (/v1/telemetry + demo producer)
+│   ├── app/incidents.py      incident lifecycle, severity ladder, escalation sweep
+│   ├── app/notify.py         in-app, email (Resend), voice channels
+│   ├── app/mail.py           Resend client + Muse email templates
+│   ├── app/cloud.py          Firestore / Pub/Sub / BigQuery / GCS / Logging adapters (fail-soft)
+│   ├── app/agent/            adk_agent.py (pipeline), tools.py, schema.py, runner.py, fallback.py,
+│   │                         extract.py (PDF), evidence.py (photos), muse_live.py (copilot + Gemini Live)
+│   ├── app/voice/            dograh.py client, calls.py (call types, outcomes), scenarios.json, workflows/*.json
+│   ├── app/routers/          auth, orgs, machines, device, incidents, misc, voice, work_orders, muse
+│   ├── scripts/              device_sample.py (reference device), trigger_fault.py
+│   └── Dockerfile
+├── public/                   models (Kenney factory kit), HDRIs, machine photos (credits.json), logos, Muse renders
+├── Dockerfile                frontend image (standalone Next.js)
+├── cloudbuild.frontend.yaml  Cloud Build config for the frontend
+└── deploy.sh                 ./deploy.sh [backend|frontend|all]
+```
+
+---
+
+## Run locally
+
+Prerequisites: Node 22+, Python 3.12, a Google Cloud project with Vertex AI enabled (or an AI Studio key), `gcloud` authenticated.
 
 ```bash
-# 1 · backend (Python 3.12)
-cd backend && uv venv --python 3.12 .venv && uv pip install --python .venv/bin/python -r requirements.txt
-cp .env.example .env            # set AUTH_SECRET; GOOGLE_API_KEY etc. are optional
-cd .. && npm run backend        # http://localhost:8000
+# 1. backend
+cd backend
+python3.12 -m venv .venv && .venv/bin/pip install -r requirements.txt
+cp .env.example .env            # fill in the values below
+.venv/bin/uvicorn app.main:app --reload --port 8000
 
-# 2 · frontend
-npm install && cp .env.example .env.local
-npm run dev                     # http://localhost:3000  (proxies /api/* and /v1/* to the backend)
-
-# 3 · a device (after onboarding a machine and copying its key)
-npm run device -- --device <device_id> --key <api_key> --type conveyor --fault bearing_wear
+# 2. frontend (new terminal, repo root)
+npm install
+cp .env.example .env.local      # BACKEND_URL=http://localhost:8000
+npm run dev                     # http://localhost:3000
 ```
 
-Without any Google Cloud credentials everything still works: Gemini falls back to a rule-based investigator and template
-extraction, Google sign-in is replaced by email/password, and emails are recorded as "simulated". Add keys to the two
-`.env` files to switch each integration on. Voice escalation is live: set `DOGRAH_API_KEY` (self-hosted Dograh, Gemini Live realtime voice) and pick a TeleCMI number on **/app/voice**; each call type is a JSON workflow in `backend/app/voice/workflows`.
+Sign in with `demo@batchguard.ai` / `demo1234`. Demo mode seeds a packaging line with six machines and runs a bearing-wear fault cycle on the conveyor every 30 minutes, so incidents, reports and escalations appear on their own.
 
-## Live
+### Backend environment (`backend/.env`)
 
-- App: https://batchguard-frontend-6our3ivvha-as.a.run.app (demo login `demo@batchguard.ai` / `demo1234`)
-- API: https://batchguard-backend-6our3ivvha-as.a.run.app (`/api/health`, device API at `/v1/telemetry`)
+| Variable | Purpose |
+|---|---|
+| `APP_URL`, `AUTH_SECRET`, `DATABASE_PATH`, `UPLOAD_DIR` | app basics |
+| `GOOGLE_GENAI_USE_VERTEXAI=true`, `GOOGLE_CLOUD_PROJECT`, `GOOGLE_CLOUD_LOCATION=global` | Gemini on Vertex AI (or `GOOGLE_API_KEY` for AI Studio) |
+| `GEMINI_MODEL_FAST`, `GEMINI_MODEL_PRO` | `gemini-2.5-flash`, `gemini-2.5-pro` |
+| `GEMINI_LIVE_MODEL`, `GEMINI_LIVE_LOCATION`, `GEMINI_LIVE_VOICE`, `GEMINI_LIVE_LANGUAGE` | Muse realtime voice (`gemini-live-2.5-flash-native-audio`, `us-central1`, `Kore`, `en-IN`) |
+| `GCP_PROJECT`, `GCP_LOCATION`, `GOOGLE_APPLICATION_CREDENTIALS`, `FIRESTORE_DATABASE`, `BIGQUERY_DATASET`, `GCS_BUCKET`, `PUBSUB_TOPIC_TELEMETRY`, `CLOUD_LOGGING` | Google Cloud data services (all fail-soft when empty) |
+| `FIREBASE_PROJECT_ID` | verify Google sign-in tokens |
+| `RESEND_API_KEY`, `RESEND_FROM`, `EMAIL_ASSET_BASE` | email; empty key → emails recorded as "simulated" |
+| `DOGRAH_BASE_URL`, `DOGRAH_API_KEY`, `DOGRAH_TELEPHONY_CONFIG_ID`, `DOGRAH_FROM_PHONE_NUMBER_ID`, `VOICE_AUTO_DIAL` | phone escalation through Dograh + TeleCMI |
+| `DEMO_MODE`, `STALE_AFTER_SECONDS`, `INCIDENT_COOLDOWN_SECONDS`, `ESCALATION_TIMEOUT_SECONDS`, `TREND_WINDOW_SECONDS` | demo and detection tuning |
 
-## Google Cloud
+### Frontend environment (`.env.local`)
 
-Project `batchguard-ai-33e4` (asia-southeast1). What runs where:
+`BACKEND_URL` (proxy target for `/api/*` and `/v1/*`), `NEXT_PUBLIC_BACKEND_URL` (origin the browser uses for the voice websocket), `NEXT_PUBLIC_FIREBASE_*` (Google sign-in button; optional).
 
-| Service | Used for | Where in code |
-|---|---|---|
-| Vertex AI — Gemini 2.5 Flash/Pro (`global`) | ADK investigation pipeline, "ask the agent", manual extraction | `backend/app/agent/` |
-| Agent Development Kit | `SequentialAgent`(gather ‖ → hypotheses → evaluator → recommender → reporter) | `backend/app/agent/adk_agent.py` |
-| Firestore | live operational mirror: machines + latest values, incidents, notifications, orgs, contacts | `backend/app/cloud.py` |
-| Pub/Sub → BigQuery | every reading is published to `telemetry`; a BigQuery subscription writes `batchguard.telemetry` (partitioned, no code) | `cloud.publish_readings` |
-| BigQuery | history beyond local retention for charts and the agent's `get_readings` | `cloud.query_history` |
-| Cloud Storage | uploaded manuals / datasheets (`gs://<project>-manuals`) | `cloud.upload_manual` |
-| Cloud Logging | structured backend + ADK logs | `cloud.setup_logging` |
-| Cloud Run | backend (always-on, 1 instance) + frontend (scale-to-zero) | `deploy.sh`, `Dockerfile`s |
-| Secret Manager | `AUTH_SECRET` | `deploy.sh` |
+---
 
-Local dev talks to the same project through `backend/secrets/sa.json` (git-ignored). Everything degrades to local-only
-when `GCP_PROJECT` is empty.
+## Connect a machine
 
-## Deploy
+After onboarding, each machine page shows its endpoint, key and code samples. The minimum:
 
 ```bash
-./deploy.sh            # builds both images with Cloud Build and deploys to Cloud Run
+curl -X POST http://localhost:8000/v1/telemetry \
+  -H "X-Device-Key: bg_live_..." -H "Content-Type: application/json" \
+  -d '{"device_id":"main-conveyor-41y","readings":[{"parameter":"motor_temp","value":71.2,"unit":"C"}]}'
 ```
 
-## Flow
+Readings are validated against the verified spec (unknown parameters and mismatched units are rejected), de-duplicated by `reading_id`, and answered with the detection signals they produced. `backend/scripts/device_sample.py` is a reference device; `trigger_fault.py` injects a bearing-wear ramp.
 
-sign up → onboarding modals (organisation, use cases, escalation contacts; Muse guides each step) → dashboard →
-onboard a machine (PDF → Gemini extraction, or manual; every value ticked as verified) → device ID + key + endpoint →
-device posts to `/v1/telemetry` → detection opens an incident → Muse investigates → in-app + email escalation → engineer
-acknowledges / resolves with feedback.
+---
 
-## Stack
+## Muse copilot
 
-- Next.js 16 (App Router) + TypeScript + Tailwind v4
-- three.js via `@react-three/fiber` + `@react-three/drei` (3D factory, animated agent character, procedural textures and environment lighting, HUD labels)
-- `framer-motion` for scroll-driven stages and reveals
-- `lucide-react` icons
-- Fonts: Barlow Condensed (display), Barlow (body), IBM Plex Mono (data) via `next/font`
+On the overview, **Ask Muse** gives a live greeting and a chat that streams token by token. Press the round voice button to talk to Muse in realtime (Gemini Live, Indian English). Ask for anything on the dashboard and Muse navigates there and highlights it in yellow while it keeps talking:
 
-## Structure
+- "How is production running right now?"
+- "Take me to the most urgent incident"
+- "Show me the compressor's pressure chart"
+- "Where are the work orders for the main conveyor?"
+- "Open the email settings"
 
-```
-src/
-  app/
-    page.tsx                 # landing page composition
-    login/ signup/ onboarding/   # auth + Muse-guided onboarding wizard
-    app/                     # dashboard: layout (Shell), overview, machines/[id], onboard, workflow, factory,
-                             #   telemetry, incidents/[id], observability, contacts, settings
-    globals.css              # light / blue theme tokens
-  components/
-    three/
-      FactoryScene.tsx       # the 3D line: feeder, conveyor+motor, inspection, sealer, boxes, surroundings, camera rig
-      AgentBot.tsx           # Muse as a 3D robot (hard hat + gear, glossy face screen, ear pods, coveralls, tablet); walks around the line, inspects, calls, waves
-      story.ts               # the 8-stage incident script (running → drift → … → resolved) + fake readings
-      HUD.tsx                # overlay readouts, stage tag, call bubble
-      HeroScene.tsx          # client-only dynamic wrapper
-      ParticleField.tsx      # CTA background
-      LiveFactory.tsx        # dashboard 3D view of onboarded machines, coloured by live status
-    app/                     # Shell (sidebar, topbar, live notifications), charts, KeyReveal
-    auth/AuthCard.tsx        # email/password + Google (Firebase) sign-in
-    ui/                      # Primitives (Button, Input, Modal, Badge…), Toast
-    muse/
-      MuseGuide.tsx          # in-app Muse that waves on each step/page
-      MuseCompanion.tsx      # fixed full-body companion from the render: floats, leans to the cursor, waves on every section
-      MuseLogo.tsx           # head crop of the render for header/footer
-      MuseFace.tsx           # SVG face (kept for small inline uses)
-    landing/
-      Pipeline.tsx           # builder-canvas node graph with animated edges/packets
-      Hero.tsx               # autoplaying 3D incident loop
-      Story.tsx              # scroll-driven 3D incident (sticky viewport, steps set the stage)
-      Journey.tsx            # three stations on a conveyor (Onboard → Watch → Respond)
-      Problem / Agent / Architecture / Evaluation / Scale / CTA / Footer / Navbar / Marquee
-    ui/                      # Section, Reveal, GlowCard
-  lib/content.ts             # all landing copy, mirrors the PRD
-  lib/api.ts                 # typed fetch client + useLive() SSE hook
-  lib/firebase.ts            # optional Google sign-in
-backend/                     # FastAPI + ADK (see backend/README.md)
+The voice websocket connects straight to the backend origin, so the browser must be able to reach `NEXT_PUBLIC_BACKEND_URL` (defaults to `http://localhost:8000`).
+
+---
+
+## Voice escalation (phone)
+
+`/app/voice` lists five call types as Dograh workflows (JSON in `backend/app/voice/workflows`), lets you pick a TeleCMI caller number, publish the workflows, place a test call with a condition preset, and review call history with transcripts, recordings and the extracted outcome. An acknowledgement spoken on the call acknowledges the incident; a follow-up call's verdict resolves it. Auto-dial is per organisation and off by default.
+
+---
+
+## Deploy to Google Cloud
+
+```bash
+# one-time
+gcloud auth login && gcloud config set project <PROJECT>
+printf '%s' "$DOGRAH_API_KEY" | gcloud secrets create batchguard-dograh-key --data-file=-
+printf '%s' "$RESEND_API_KEY" | gcloud secrets create batchguard-resend-key --data-file=-   # optional
+echo <PROJECT> > backend/.gcp-project
+
+# every release
+./deploy.sh all          # backend (always-on, 1 instance, session affinity) then frontend (scale-to-zero)
 ```
 
-## Assets & credits
+`deploy.sh` builds both images with Cloud Build, pushes to Artifact Registry, deploys to Cloud Run, wires the frontend to the backend URL and the backend to the public app URL. A $100 budget alert is set on the project.
 
-- `public/muse.webp` / `muse.png` — Muse character render (background removed with `@imgly/background-removal-node`), used by the
-  header logo, the scrolling companion and the Journey notes.
-- `public/models/factory/` — [Kenney Factory Kit 3.0](https://kenney.nl/assets/factory-kit), CC0. Conveyors, hopper, scanner,
-  robot arm, machines, structures, pipes, crane, cones. Loaded with `useGLTF` + drei `Clone` in `FactoryScene.tsx`.
-- `public/logos/` — brand marks from [Simple Icons](https://simpleicons.org) (CC0), rendered by `src/components/ui/TechLogo.tsx`.
-- `public/machines/` — real machine photos from Wikimedia Commons (CC0 / CC BY / CC BY-SA; per-file attribution in
-  `credits.json`, shown in the "Learn more" sheet), used by the onboarding type picker (`src/lib/machineTypes.ts`).
-- `public/hdri/`, `public/textures/floor/`, `public/models/ph/` — [Poly Haven](https://polyhaven.com) CC0 HDRIs
-  (`industrial_workshop_foundry`, `machine_shop_01`), the `concrete_floor_02` PBR set, and photoscanned props
-  (storage cart, tool chest, barrels, boxes, hand truck, caged lights, fire extinguisher, wet-floor sign, drill press,
-  ladder, trash can) used in the dashboard 3D factory.
+> The backend keeps its SQLite file on the container disk; Firestore holds a mirror and BigQuery every reading. Mount a volume at `/data` for persistence across redeploys.
 
-## Blender models
+---
 
-`public/models/` is the drop zone for glTF/GLB exports. `muse.glb` (feet at origin, facing +Z, ~2.2 units tall) replaces the
-procedural robot when `NEXT_PUBLIC_MUSE_GLB=1` is set. See `public/models/README.md`.
+## Testing and quality
 
-## Editing the incident story
+```bash
+npm run lint && npx tsc --noEmit && npm run build     # frontend
+cd backend && .venv/bin/python -m compileall app        # backend
+```
 
-Everything the 3D scene does is driven by `Stage` in `src/components/three/story.ts`. Add or reorder stages there;
-`FactoryScene.tsx` maps each stage to belt speed, lamp colour, vibration, sparks, camera focus and the agent drone.
+Blind evaluation: on Settings, record an injected fault, run `trigger_fault.py`, and the scoreboard reports detection, delay and top-1/top-3 cause accuracy for the first report that follows.
+
+---
+
+## Credits
+
+Kenney Factory Kit (CC0) · Poly Haven HDRIs and textures (CC0) · machine photos from Wikimedia Commons (see `public/machines/credits.json`) · Simple Icons.
+
+BatchGuard AI is advisory only. Recommendations are for qualified personnel following site safety and lockout procedures.

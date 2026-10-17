@@ -185,78 +185,99 @@ export function MuseLiveProvider({ children }: { children: ReactNode }) {
     if (voice !== "off") return;
     setVoiceError(null);
     setVoice("connecting");
+    const fail = (msg: string) => { console.error("[muse voice]", msg); setVoiceError(msg); stopVoice(); setVoice("error"); };
+    // 1. short-lived token from the backend (through the Next proxy, cookie auth)
+    let token = "";
+    try { token = (await get<{ token: string }>("/api/muse/live-token")).token; }
+    catch (e) { return fail(`Could not get a voice token: ${e instanceof Error ? e.message : String(e)}. Is the backend running on :8000?`); }
+    // 2. microphone
+    let stream: MediaStream;
+    try { stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true } }); }
+    catch (e) { return fail(`Microphone blocked: ${e instanceof Error ? e.message : String(e)}. Allow the mic for this site (lock icon in the address bar) and try again.`); }
+    micStream.current = stream;
+    // 3. speaker context (created inside the click so autoplay rules allow it)
     try {
-      const { token } = await get<{ token: string }>("/api/muse/live-token");
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
-      micStream.current = stream;
       const out = new AudioContext({ sampleRate: 24000 });
       outCtx.current = out;
       await out.resume();
-      const ws = new WebSocket(`${WS_BASE}/api/muse/live?token=${encodeURIComponent(token)}&page=${encodeURIComponent(pathRef.current)}`);
+    } catch (e) { return fail(`Audio output failed: ${e instanceof Error ? e.message : String(e)}`); }
+    // 4. websocket relay straight to the backend (Next rewrites don't carry websockets)
+    const url = `${WS_BASE}/api/muse/live?token=${encodeURIComponent(token)}&page=${encodeURIComponent(pathRef.current)}`;
+    let ws: WebSocket;
+    try {
+      ws = new WebSocket(url);
       wsRef.current = ws;
       await new Promise<void>((resolve, reject) => {
-        ws.onopen = () => resolve();
-        ws.onerror = () => reject(new Error("Could not reach the voice relay. Is the backend running?"));
+        const timer = setTimeout(() => reject(new Error("timed out after 10 s")), 10000);
+        ws.onopen = () => { clearTimeout(timer); resolve(); };
+        ws.onerror = () => { clearTimeout(timer); reject(new Error("connection refused")); };
+        ws.onclose = (ev) => { clearTimeout(timer); reject(new Error(`closed (${ev.code})${ev.code === 4401 ? " — token rejected" : ""}`)); };
       });
-      ws.onclose = () => { if (wsRef.current === ws) stopVoice(); };
-      ws.onmessage = (ev) => {
-        let msg: Record<string, unknown>;
-        try { msg = JSON.parse(ev.data); } catch { return; }
-        const t = msg.type;
-        if (t === "ready") {
-          setVoice("listening");
-          ws.send(JSON.stringify({ type: "text", text: "(The user just opened voice mode. Greet them in two short sentences with how the factory is running right now, then offer the most urgent thing — an open incident if any.)" }));
-        } else if (t === "audio") {
-          const f32 = pcm16Base64ToFloat(String(msg.data));
-          const ctx = outCtx.current;
-          if (!ctx) return;
-          let acc = 0;
-          for (let i = 0; i < f32.length; i += 16) acc += f32[i] * f32[i];
-          const rms = Math.sqrt(acc / (f32.length / 16));
-          const delay = Math.max(0, (playHead.current - ctx.currentTime) * 1000);
-          setTimeout(() => setOutLevel(Math.min(1, rms * 5)), delay);
-          setTimeout(() => setOutLevel((v) => v * 0.4), delay + Math.max(80, (f32.length / 24000) * 1000));
-          const buf = ctx.createBuffer(1, f32.length, 24000);
-          buf.copyToChannel(f32, 0);
-          const src = ctx.createBufferSource();
-          src.buffer = buf;
-          src.connect(ctx.destination);
-          const at = Math.max(ctx.currentTime + 0.02, playHead.current);
-          src.start(at);
-          playHead.current = at + buf.duration;
-          sources.current.push(src);
-          src.onended = () => { sources.current = sources.current.filter((s) => s !== src); };
-          setVoice("speaking");
-          if (speakingTimer.current) clearTimeout(speakingTimer.current);
-          speakingTimer.current = setTimeout(() => setVoice((v) => (v === "speaking" ? "listening" : v)), Math.max(200, (playHead.current - ctx.currentTime) * 1000 + 150));
-        } else if (t === "interrupted") {
-          stopPlayback();
-          setVoice("listening");
-          setLiveCaption((c) => ({ ...c, muse: "" }));
-        } else if (t === "caption") {
-          const role = msg.role === "user" ? "user" : "muse";
-          const text = String(msg.text ?? "");
-          setLiveCaption((c) => ({ ...c, [role]: (c[role] + text).slice(-400) }));
-        } else if (t === "turn_complete") {
-          setLiveCaption((c) => {
-            const out: { role: "user" | "muse"; text: string }[] = [];
-            if (c.user.trim()) out.push({ role: "user", text: c.user.trim() });
-            if (c.muse.trim()) out.push({ role: "muse", text: c.muse.trim() });
-            if (out.length) setCaptions((cs) => [...cs, ...out].slice(-40));
-            return { user: "", muse: "" };
-          });
-        } else if (t === "navigate") {
-          goTo(String(msg.path), (msg.highlight as string | null) ?? null);
-        } else if (t === "error") {
-          setVoiceError(String(msg.text));
-          setVoice("error");
-        }
-      };
-      // mic → 16 kHz PCM16 → relay
-      const mic = new AudioContext({ sampleRate: 16000 });
+    } catch (e) { return fail(`Voice relay ${WS_BASE} unreachable: ${e instanceof Error ? e.message : String(e)}. Check the backend is up and NEXT_PUBLIC_BACKEND_URL points at it.`); }
+    ws.onclose = (ev) => { if (wsRef.current === ws) { if (ev.code !== 1000 && ev.code !== 1005) setVoiceError(`Voice ended (${ev.code}${ev.reason ? ": " + ev.reason : ""})`); stopVoice(); } };
+    ws.onerror = () => { /* surfaced through onclose */ };
+    ws.onmessage = (ev) => {
+      let msg: Record<string, unknown>;
+      try { msg = JSON.parse(ev.data); } catch { return; }
+      const t = msg.type;
+      if (t === "ready") {
+        setVoice("listening");
+        ws.send(JSON.stringify({ type: "text", text: "(The user just opened voice mode. Greet them in two short sentences with how the factory is running right now, then offer the most urgent thing — an open incident if any.)" }));
+      } else if (t === "audio") {
+        const f32 = pcm16Base64ToFloat(String(msg.data));
+        const ctx = outCtx.current;
+        if (!ctx) return;
+        let acc = 0;
+        for (let i = 0; i < f32.length; i += 16) acc += f32[i] * f32[i];
+        const rms = Math.sqrt(acc / (f32.length / 16));
+        const delay = Math.max(0, (playHead.current - ctx.currentTime) * 1000);
+        setTimeout(() => setOutLevel(Math.min(1, rms * 5)), delay);
+        setTimeout(() => setOutLevel((v) => v * 0.4), delay + Math.max(80, (f32.length / 24000) * 1000));
+        const buf = ctx.createBuffer(1, f32.length, 24000);
+        buf.copyToChannel(f32, 0);
+        const src = ctx.createBufferSource();
+        src.buffer = buf;
+        src.connect(ctx.destination);
+        const at = Math.max(ctx.currentTime + 0.02, playHead.current);
+        src.start(at);
+        playHead.current = at + buf.duration;
+        sources.current.push(src);
+        src.onended = () => { sources.current = sources.current.filter((s) => s !== src); };
+        setVoice("speaking");
+        if (speakingTimer.current) clearTimeout(speakingTimer.current);
+        speakingTimer.current = setTimeout(() => setVoice((v) => (v === "speaking" ? "listening" : v)), Math.max(200, (playHead.current - ctx.currentTime) * 1000 + 150));
+      } else if (t === "interrupted") {
+        stopPlayback();
+        setVoice("listening");
+        setLiveCaption((c) => ({ ...c, muse: "" }));
+      } else if (t === "caption") {
+        const role = msg.role === "user" ? "user" : "muse";
+        const text = String(msg.text ?? "");
+        setLiveCaption((c) => ({ ...c, [role]: (c[role] + text).slice(-400) }));
+      } else if (t === "turn_complete") {
+        setLiveCaption((c) => {
+          const out: { role: "user" | "muse"; text: string }[] = [];
+          if (c.user.trim()) out.push({ role: "user", text: c.user.trim() });
+          if (c.muse.trim()) out.push({ role: "muse", text: c.muse.trim() });
+          if (out.length) setCaptions((cs) => [...cs, ...out].slice(-40));
+          return { user: "", muse: "" };
+        });
+      } else if (t === "navigate") {
+        goTo(String(msg.path), (msg.highlight as string | null) ?? null);
+      } else if (t === "error") {
+        setVoiceError(String(msg.text));
+        setVoice("error");
+      }
+    };
+    // 5. mic → 16 kHz PCM16 → relay (resample in JS when the browser refuses a 16 kHz context)
+    try {
+      let mic: AudioContext;
+      try { mic = new AudioContext({ sampleRate: 16000 }); } catch { mic = new AudioContext(); }
       micCtx.current = mic;
+      await mic.resume();
+      const ratio = mic.sampleRate / 16000;
       const srcNode = mic.createMediaStreamSource(stream);
-      const proc = mic.createScriptProcessor(2048, 1, 1);
+      const proc = mic.createScriptProcessor(4096, 1, 1);
       const silent = mic.createGain();
       silent.gain.value = 0;
       proc.onaudioprocess = (e) => {
@@ -264,17 +285,18 @@ export function MuseLiveProvider({ children }: { children: ReactNode }) {
         let sum = 0;
         for (let i = 0; i < f.length; i += 8) sum += f[i] * f[i];
         setLevel(Math.min(1, Math.sqrt(sum / (f.length / 8)) * 6));
-        if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: "audio", data: floatToPcm16Base64(f) }));
+        let out: Float32Array = f;
+        if (ratio > 1.01) {
+          const n = Math.floor(f.length / ratio);
+          out = new Float32Array(n);
+          for (let i = 0; i < n; i++) out[i] = f[Math.floor(i * ratio)];
+        }
+        if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: "audio", data: floatToPcm16Base64(out) }));
       };
       srcNode.connect(proc);
       proc.connect(silent);
       silent.connect(mic.destination);
-    } catch (e) {
-      setVoiceError(e instanceof Error ? e.message : String(e));
-      setVoice("error");
-      stopVoice();
-      setVoice("error");
-    }
+    } catch (e) { return fail(`Microphone capture failed: ${e instanceof Error ? e.message : String(e)}`); }
   }, [voice, goTo, stopPlayback, stopVoice]);
 
   useEffect(() => () => { wsRef.current?.close(); micStream.current?.getTracks().forEach((t) => t.stop()); }, []);
