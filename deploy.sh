@@ -62,7 +62,7 @@ deploy_simulator() {
   gcloud builds submit simulator --config simulator/cloudbuild.yaml --substitutions "_IMAGE=$REPO/simulator:latest,_DASHBOARD_URL=${APP_URL:-https://batchguard.web.app}" --quiet
   echo "▶ deploying simulator (always-on, single instance: it is the factory's telemetry source)"
   gcloud run deploy batchguard-simulator --image "$REPO/simulator:latest" --region "$REGION" \
-    --allow-unauthenticated --cpu 1 --memory 512Mi --min-instances 1 --max-instances 1 --port 8080 --timeout 3600 \
+    --allow-unauthenticated --cpu 1 --memory 512Mi --min-instances 1 --max-instances 1 --port 8080 --timeout 3600 --no-cpu-throttling --cpu-boost \
     --set-env-vars "BATCHGUARD_URL=$BACKEND_URL,DEMO_EMAIL=demo@batchguard.ai,DEMO_PASSWORD=demo1234,NEXT_PUBLIC_DASHBOARD_URL=${APP_URL:-https://batchguard.web.app}" --quiet
   SIM_URL=$(gcloud run services describe batchguard-simulator --region "$REGION" --format 'value(status.url)')
   echo "✓ simulator: $SIM_URL"
