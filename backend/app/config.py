@@ -35,6 +35,7 @@ class Settings(BaseSettings):
     firestore_database: str = ""
     cloud_logging: bool = True
     gcs_bucket: str = ""
+    db_snapshot: bool = False  # persist SQLite to gs://<bucket>/db/ (on: Cloud Run; off: local dev)
     pubsub_topic_telemetry: str = "telemetry"
     bigquery_dataset: str = "batchguard"
 

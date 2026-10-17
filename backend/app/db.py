@@ -115,13 +115,12 @@ CREATE TABLE IF NOT EXISTS _changes (
 );
 """
 
-# Tables whose rows live in Firestore (system of record). SQLite is the local working copy:
-# every change is captured by triggers and written through; on start the copy is rebuilt from Firestore.
+# SQLite is the primary database (persisted to Cloud Storage snapshots). Firestore mirrors only the
+# collections other clients and realtime listeners care about — live machine state, incidents with their
+# reports, the notification/audit trail, work orders, evidence and voice calls. Changes are captured by
+# triggers and written through within seconds.
 SYNCED: dict[str, str] = {
-    "users": "id", "orgs": "id", "contacts": "id", "lines": "id", "machines": "id", "parameters": "id",
-    "latest": "machine_id || '__' || parameter", "events": "id", "incidents": "id", "notifications": "id",
-    "workflows": "org_id", "agent_runs": "id", "chat": "id", "voice_settings": "org_id", "voice_calls": "id",
-    "evidence": "id", "work_orders": "id",
+    "machines": "id", "incidents": "id", "notifications": "id", "work_orders": "id", "evidence": "id", "voice_calls": "id",
 }
 
 
@@ -156,6 +155,10 @@ def init_db() -> None:
     cols = {r["name"] for r in c.execute("PRAGMA table_info(latest)").fetchall()}
     if "forecast" not in cols:
         c.execute("ALTER TABLE latest ADD COLUMN forecast TEXT")
+    for r in c.execute("SELECT name FROM sqlite_master WHERE type='trigger' AND name LIKE 'trg_%'").fetchall():
+        tbl = r["name"][4:-2]
+        if tbl not in SYNCED:
+            c.execute(f"DROP TRIGGER IF EXISTS {r['name']}")
     c.executescript(_trigger_sql())
     c.execute("DELETE FROM _changes")
     c.commit()

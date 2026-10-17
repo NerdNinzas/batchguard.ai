@@ -31,14 +31,13 @@ async def _sweeper() -> None:
 
 @contextlib.asynccontextmanager
 async def lifespan(app: FastAPI):
+    restored = cloud.restore_db_if_missing()  # fresh container → pull the last SQLite snapshot from Cloud Storage
     init_db()
     bus.bind_loop(asyncio.get_running_loop())
     cloud.setup_logging()
-    if cloud.enabled():
-        # Firestore is the system of record: rebuild the local working copy, then write every change through
-        counts = await asyncio.to_thread(cloud.hydrate)
-        print("hydrated from Firestore:", counts or "empty")
-        cloud.start_sync()
+    if restored:
+        print("database restored from Cloud Storage snapshot")
+    cloud.start_sync()  # Firestore live mirror + periodic snapshots
     # investigations that were in flight when the previous process stopped can never finish
     with tx() as c:
         c.execute("UPDATE agent_runs SET finished_at=?, ok=0, error='interrupted by restart' WHERE finished_at IS NULL", (time.time(),))
@@ -46,7 +45,7 @@ async def lifespan(app: FastAPI):
     if settings.demo_mode:
         await asyncio.to_thread(demo.ensure_seeded)
         demo.start_producer()
-    print(f"BatchGuard backend ready · gemini={('vertex:' + settings.google_cloud_location) if settings.google_genai_use_vertexai and settings.gemini_enabled else 'on' if settings.gemini_enabled else 'off (fallback)'} · gcp={settings.gcp_project or 'off'} · store={'firestore (write-through)' if cloud.enabled() else 'sqlite'} · email={'resend' if settings.email_enabled else 'simulated'} · voice={'dograh' if settings.voice_enabled else 'off'} · db={settings.db_file}")
+    print(f"BatchGuard backend ready · gemini={('vertex:' + settings.google_cloud_location) if settings.google_genai_use_vertexai and settings.gemini_enabled else 'on' if settings.gemini_enabled else 'off (fallback)'} · gcp={settings.gcp_project or 'off'} · store=sqlite{' + gcs snapshots' if settings.db_snapshot else ''}{' + firestore mirror' if cloud.enabled() else ''} · email={'resend' if settings.email_enabled else 'simulated'} · voice={'dograh' if settings.voice_enabled else 'off'} · db={settings.db_file}")
     yield
     task.cancel()
     await asyncio.to_thread(cloud.stop_sync)

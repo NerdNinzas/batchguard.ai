@@ -20,7 +20,6 @@ def ingest_readings(m: dict[str, Any], readings: list[dict[str, Any]]) -> dict[s
     known = {r["name"]: dict(r) for r in conn().execute("SELECT * FROM parameters WHERE machine_id=?", (m["id"],)).fetchall()}
     accepted, rejected, duplicates = 0, [], 0
     latest_payload: dict[str, Any] = {}
-    stored: list[dict[str, Any]] = []
     with tx() as c:
         for r in readings:
             p = known.get(r["parameter"])
@@ -38,7 +37,6 @@ def ingest_readings(m: dict[str, Any], readings: list[dict[str, Any]]) -> dict[s
                 continue
             c.execute("INSERT INTO readings (machine_id, parameter, value, unit, ts, received_at, reading_id) VALUES (?,?,?,?,?,?,?)",
                       (m["id"], r["parameter"], r["value"], unit, ts, t, rid))
-            stored.append({"parameter": r["parameter"], "value": r["value"], "unit": unit, "ts": ts, "received_at": t, "reading_id": rid})
             state = limit_state(p, r["value"])
             c.execute("INSERT INTO latest (machine_id, parameter, value, unit, ts, state) VALUES (?,?,?,?,?,?) "
                       "ON CONFLICT(machine_id, parameter) DO UPDATE SET value=excluded.value, unit=excluded.unit, ts=excluded.ts, state=excluded.state",
@@ -61,7 +59,8 @@ def ingest_readings(m: dict[str, Any], readings: list[dict[str, Any]]) -> dict[s
             with tx() as c:
                 c.execute("UPDATE latest SET forecast=? WHERE machine_id=? AND parameter=?", (j(fc) if fc else None, m["id"], name))
     bus.publish(m["org_id"], "telemetry", {"machine_id": m["id"], "device_id": m["device_id"], "latest": latest_payload, "ts": t})
-    cloud.buffer_readings(m["id"], stored)
+    cloud.mirror_latest(m["id"], m["org_id"], latest_payload)
+    cloud.mark_dirty()
     cloud.publish_readings(m, [{**r, "state": latest_payload[r["parameter"]]["state"]} for r in readings if r["parameter"] in latest_payload], t)
     if was_offline:
         bus.publish(m["org_id"], "machine", {"id": m["id"], "status": "normal", "health": m["health"]})
