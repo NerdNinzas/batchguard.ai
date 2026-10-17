@@ -8,7 +8,8 @@ import { useApp } from "@/components/app/Shell";
 import { useHighlight } from "@/components/muse/MuseLive";
 import { HealthRing } from "@/components/app/charts";
 import { TrendingDown, TrendingUp } from "lucide-react";
-import { Badge, Button, Empty, Spinner, StatusDot, statusTone } from "@/components/ui/Primitives";
+import { Badge, Button, Empty, StatusDot, statusTone } from "@/components/ui/Primitives";
+import { PageSkeleton } from "@/components/ui/Primitives";
 import { fmtAgo, get, type Machine, fmtEta, worstForecast } from "@/lib/api";
 import { machineType } from "@/lib/machineTypes";
 
@@ -29,7 +30,7 @@ export default function MachinesPage() {
     [subscribe],
   );
 
-  if (!machines) return <Spinner />;
+  if (!machines) return <PageSkeleton variant="cards" />;
   if (machines.length === 0) return <Empty title="No machines yet" body="Upload a manual or fill in a spec by hand." action={<Link href="/app/onboard"><Button>Onboard a machine <ArrowRight size={16} /></Button></Link>} />;
 
   return (

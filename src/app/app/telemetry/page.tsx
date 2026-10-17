@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import { useApp } from "@/components/app/Shell";
 import { LimitChart } from "@/components/app/charts";
-import { Badge, Card, Empty, Select, Spinner, statusTone } from "@/components/ui/Primitives";
+import { Badge, Card, Empty, Select, statusTone } from "@/components/ui/Primitives";
+import { PageSkeleton } from "@/components/ui/Primitives";
 import { fmtTime, get, type Machine } from "@/lib/api";
 
 type Row = { id?: number; machine_id: string; machine_name: string; parameter: string; value: number; unit?: string | null; ts: number; received_at?: number };
@@ -37,7 +38,7 @@ export default function TelemetryPage() {
     [subscribe, machines, sel],
   );
 
-  if (!machines) return <Spinner />;
+  if (!machines) return <PageSkeleton variant="rows" />;
   if (machines.length === 0) return <Empty title="No telemetry yet" body="Onboard a machine and start posting to /v1/telemetry." />;
   const m = machines.find((x) => x.id === sel.m);
   const p = m?.parameters.find((x) => x.name === sel.p);

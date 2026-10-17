@@ -11,6 +11,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useApp } from "@/components/app/Shell";
 import { Badge, Button, Card, Empty, Input, Modal, Select, Spinner, Textarea } from "@/components/ui/Primitives";
+import { PageSkeleton } from "@/components/ui/Primitives";
 import { useToast } from "@/components/ui/Toast";
 import { fmtAgo, fmtTime, get, post, put, type CallType, type Incident, type VoiceCall, type VoiceStatus, type WfEdge, type WfNode } from "@/lib/api";
 
@@ -380,7 +381,7 @@ export default function VoicePage() {
     finally { setSyncing(null); }
   }
 
-  if (!status || !types) return <Spinner label="Connecting to Dograh…" />;
+  if (!status || !types) return <PageSkeleton variant="voice" />;
   const sel = types.find((t) => t.key === open) ?? null;
   const telecmi = status.telephony.numbers.filter((n) => n.telecmi);
   const others = status.telephony.numbers.filter((n) => !n.telecmi);

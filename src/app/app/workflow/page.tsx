@@ -7,7 +7,8 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useApp } from "@/components/app/Shell";
 import { VoiceBars } from "@/components/muse/MuseConsole";
-import { Badge, Button, Card, Empty, Spinner, StatusDot, statusTone } from "@/components/ui/Primitives";
+import { Badge, Button, Card, Empty, StatusDot, statusTone } from "@/components/ui/Primitives";
+import { PageSkeleton } from "@/components/ui/Primitives";
 import { useToast } from "@/components/ui/Toast";
 import { fmtAgo, fmtEta, fmtTime, get, put, worstForecast, type Incident, type Latest, type LiveEvent, type Machine } from "@/lib/api";
 
@@ -216,7 +217,7 @@ export default function WorkflowPage() {
     } catch (e) { toast("error", "Save failed", e instanceof Error ? e.message : ""); } finally { setSaving(false); }
   }
 
-  if (!machines) return <Spinner />;
+  if (!machines) return <PageSkeleton variant="canvas" />;
   if (machines.length === 0) return <Empty title="Nothing to wire yet" body="Onboard at least one machine, then connect them upstream → downstream here." action={<Link href="/app/onboard"><Button>Onboard a machine</Button></Link>} />;
 
   const STAGES = [

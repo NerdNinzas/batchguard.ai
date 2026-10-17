@@ -132,3 +132,66 @@ export function Spinner({ label }: { label?: string }) {
     </div>
   );
 }
+
+
+/* ---------- skeleton loading ---------- */
+export function Skeleton({ className = "" }: { className?: string }) {
+  return <div aria-hidden className={`skeleton ${className}`} />;
+}
+
+function SkCard({ lines = 3, className = "" }: { lines?: number; className?: string }) {
+  return (
+    <div className={`card rounded-2xl p-5 ${className}`}>
+      <Skeleton className="h-4 w-40" />
+      <div className="mt-4 space-y-2.5">{Array.from({ length: lines }).map((_, i) => <Skeleton key={i} className={`h-3 ${["w-full", "w-5/6", "w-2/3", "w-3/4"][i % 4]}`} />)}</div>
+    </div>
+  );
+}
+
+/** Page-shaped placeholders so every dashboard view loads with its layout already in place. */
+export function PageSkeleton({ variant = "cards" }: { variant?: "overview" | "cards" | "detail" | "rows" | "canvas" | "voice" }) {
+  if (variant === "overview") {
+    return (
+      <div className="space-y-6" aria-busy>
+        <div className="card relative overflow-hidden rounded-3xl p-7 lg:p-9">
+          <div className="grid gap-6 lg:grid-cols-[1.4fr_1fr]">
+            <div><Skeleton className="h-3 w-56" /><Skeleton className="mt-4 h-12 w-3/4" /><Skeleton className="mt-4 h-3 w-full" /><Skeleton className="mt-2 h-3 w-5/6" /><div className="mt-5 flex gap-2"><Skeleton className="h-9 w-36 rounded-full" /><Skeleton className="h-9 w-28 rounded-full" /><Skeleton className="h-9 w-40 rounded-full" /></div></div>
+            <div className="grid grid-cols-2 gap-3 self-center">{[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-24 rounded-2xl" />)}</div>
+          </div>
+        </div>
+        <div className="grid gap-5 lg:grid-cols-[300px_1fr]"><Skeleton className="aspect-square rounded-3xl" /><Skeleton className="min-h-[420px] rounded-3xl" /></div>
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{[0, 1, 2, 3, 4, 5].map((i) => <div key={i} className="card overflow-hidden rounded-2xl"><Skeleton className="h-36 rounded-none" /><div className="p-4"><Skeleton className="h-4 w-1/2" /><div className="mt-3 grid grid-cols-2 gap-2"><Skeleton className="h-10" /><Skeleton className="h-10" /></div></div></div>)}</div>
+      </div>
+    );
+  }
+  if (variant === "detail") {
+    return (
+      <div className="space-y-5" aria-busy>
+        <div className="card rounded-3xl p-6"><Skeleton className="h-3 w-40" /><Skeleton className="mt-3 h-9 w-2/3" /><Skeleton className="mt-3 h-3 w-1/2" /></div>
+        <div className="grid gap-4 lg:grid-cols-2">{[0, 1, 2, 3].map((i) => <div key={i} className="card rounded-2xl p-5"><Skeleton className="h-4 w-32" /><Skeleton className="mt-4 h-52" /></div>)}</div>
+        <div className="grid gap-4 lg:grid-cols-2"><SkCard lines={4} /><SkCard lines={4} /></div>
+      </div>
+    );
+  }
+  if (variant === "rows") {
+    return <div className="space-y-3" aria-busy>{[0, 1, 2, 3, 4, 5].map((i) => <div key={i} className="card flex items-center gap-4 rounded-2xl p-4"><Skeleton className="h-10 w-10 rounded-xl" /><div className="flex-1"><Skeleton className="h-4 w-2/3" /><Skeleton className="mt-2 h-3 w-1/3" /></div><Skeleton className="h-5 w-16 rounded-full" /><Skeleton className="h-5 w-16 rounded-full" /></div>)}</div>;
+  }
+  if (variant === "canvas") {
+    return (
+      <div className="space-y-4" aria-busy>
+        <div className="card relative h-[640px] overflow-hidden rounded-3xl"><Skeleton className="h-full rounded-none" /><div className="absolute left-4 top-4 flex gap-2">{[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-7 w-28 rounded-full" />)}</div><div className="absolute inset-x-0 bottom-10 flex justify-center gap-8">{[0, 1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-28 w-28 rounded-2xl" />)}</div></div>
+        <div className="grid gap-4 md:grid-cols-3"><SkCard /><SkCard /><SkCard /></div>
+      </div>
+    );
+  }
+  if (variant === "voice") {
+    return (
+      <div className="space-y-5" aria-busy>
+        <div className="card rounded-3xl p-8"><Skeleton className="h-3 w-48" /><Skeleton className="mt-3 h-10 w-1/2" /><Skeleton className="mt-3 h-3 w-2/3" /><div className="mt-4 flex gap-2">{[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-6 w-32 rounded-full" />)}</div></div>
+        <div className="grid gap-5 lg:grid-cols-[1.2fr_1fr]"><SkCard lines={5} /><div className="space-y-5"><SkCard lines={2} /><SkCard lines={4} /></div></div>
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{[0, 1, 2, 3, 4].map((i) => <div key={i} className="card rounded-3xl p-5"><Skeleton className="h-11 w-11 rounded-2xl" /><Skeleton className="mt-4 h-5 w-2/3" /><Skeleton className="mt-2 h-3 w-full" /><Skeleton className="mt-2 h-3 w-5/6" /></div>)}</div>
+      </div>
+    );
+  }
+  return <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3" aria-busy>{[0, 1, 2, 3, 4, 5].map((i) => <div key={i} className="card overflow-hidden rounded-2xl"><Skeleton className="h-36 rounded-none" /><div className="p-4"><Skeleton className="h-4 w-1/2" /><Skeleton className="mt-2 h-3 w-1/3" /><div className="mt-4 grid grid-cols-2 gap-2"><Skeleton className="h-10" /><Skeleton className="h-10" /><Skeleton className="h-10" /><Skeleton className="h-10" /></div></div></div>)}</div>;
+}

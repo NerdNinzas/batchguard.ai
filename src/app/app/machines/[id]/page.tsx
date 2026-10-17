@@ -10,7 +10,8 @@ import { WorkOrdersBoard } from "@/components/app/WorkOrders";
 import { useApp } from "@/components/app/Shell";
 import { Spot, useHighlight, useMuse } from "@/components/muse/MuseLive";
 import { HealthRing, LimitChart } from "@/components/app/charts";
-import { Badge, Button, Card, Modal, Spinner, StatusDot, statusTone } from "@/components/ui/Primitives";
+import { Badge, Button, Card, Modal, StatusDot, statusTone } from "@/components/ui/Primitives";
+import { PageSkeleton } from "@/components/ui/Primitives";
 import { useToast } from "@/components/ui/Toast";
 import { del, fmtAgo, fmtEta, fmtTime, get, post, type Contact, type Incident, type Machine } from "@/lib/api";
 import { machineType } from "@/lib/machineTypes";
@@ -73,7 +74,7 @@ export default function MachinePage() {
     [subscribe, id, window_, load],
   );
 
-  if (!m) return <Spinner />;
+  if (!m) return <PageSkeleton variant="detail" />;
 
   async function rotate() {
     const r = await post<{ api_key: string; code: Record<string, string> }>(`/api/machines/${id}/rotate-key`);

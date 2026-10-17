@@ -4,7 +4,8 @@ import { Spot, useMuse } from "@/components/muse/MuseLive";
 import { Plus, Save, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useApp } from "@/components/app/Shell";
-import { Button, Card, Input, Spinner } from "@/components/ui/Primitives";
+import { Button, Card, Input } from "@/components/ui/Primitives";
+import { PageSkeleton } from "@/components/ui/Primitives";
 import { useToast } from "@/components/ui/Toast";
 import { del, get, post, put, type Contact } from "@/lib/api";
 
@@ -17,7 +18,7 @@ export default function ContactsPage() {
   useEffect(() => { load(); }, [editedTick]);
   const { subscribe } = useApp();
   useEffect(() => subscribe((e) => { if (e.type === "contact") load(); }), [subscribe]);
-  if (!items) return <Spinner />;
+  if (!items) return <PageSkeleton variant="rows" />;
 
   async function add() {
     if (!draft.name) return toast("warning", "Name is required");

@@ -3,6 +3,7 @@
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Clone, ContactShadows, Environment, OrbitControls, useGLTF, useTexture } from "@react-three/drei";
 import { Suspense, useMemo, useRef, type MutableRefObject } from "react";
+import { useProgress } from "@react-three/drei";
 import * as THREE from "three";
 import type { Latest, Machine } from "@/lib/api";
 
@@ -187,6 +188,7 @@ export default function LiveFactory({ machines, latest }: { machines: Machine[];
   const labels = useRef<Record<string, HTMLDivElement | null>>({});
   return (
     <div className="relative h-full w-full">
+    <LoadOverlay />
     <Canvas shadows dpr={[1, 1.75]} camera={{ position: [0, 9.5, width * 0.5 + 12], fov: 40 }} gl={{ antialias: true, alpha: true, toneMapping: THREE.ACESFilmicToneMapping }} style={{ background: "radial-gradient(ellipse at 50% 30%, #2a3140 0%, #171b23 70%)" }}>
       <ambientLight intensity={0.22} />
       <directionalLight position={[8, 14, 6]} intensity={0.9} color="#fff3e0" castShadow shadow-mapSize={[2048, 2048]} shadow-bias={-0.0003} shadow-camera-left={-24} shadow-camera-right={24} shadow-camera-top={24} shadow-camera-bottom={-24} />
@@ -221,6 +223,20 @@ export default function LiveFactory({ machines, latest }: { machines: Machine[];
         );
       })}
     </div>
+    </div>
+  );
+}
+
+
+/** Shimmer + progress while the kit models, textures and HDRI download (served from the CDN, cached after first visit). */
+function LoadOverlay() {
+  const { active, progress, loaded, total } = useProgress();
+  if (!active && (loaded > 0 || total === 0)) return null;
+  return (
+    <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center bg-[#171b23]/70 backdrop-blur-[2px]">
+      <div className="flex gap-6">{[0, 1, 2, 3, 4].map((i) => <div key={i} className="skeleton h-24 w-24 rounded-2xl opacity-60" />)}</div>
+      <div className="mt-6 h-1.5 w-56 overflow-hidden rounded-full bg-white/15"><div className="h-full rounded-full bg-sky transition-[width] duration-300" style={{ width: `${Math.max(4, progress)}%` }} /></div>
+      <p className="mt-2 font-mono text-[11px] uppercase tracking-[0.25em] text-white/70">Loading 3D models · {Math.round(progress)}%{total ? ` · ${loaded}/${total}` : ""}</p>
     </div>
   );
 }

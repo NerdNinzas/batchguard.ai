@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { Bars } from "@/components/app/charts";
-import { Badge, Card, Spinner, Stat } from "@/components/ui/Primitives";
+import { Badge, Card, Stat } from "@/components/ui/Primitives";
+import { PageSkeleton } from "@/components/ui/Primitives";
 import { fmtTime, get } from "@/lib/api";
 
 type Obs = {
@@ -23,7 +24,7 @@ export default function ObservabilityPage() {
     const id = setInterval(load, 10000);
     return () => clearInterval(id);
   }, []);
-  if (!d) return <Spinner />;
+  if (!d) return <PageSkeleton variant="cards" />;
   const total = d.ingest_per_minute.reduce((a, b) => a + b, 0);
   const errors = d.routes.reduce((a, r) => a + r.errors, 0);
   const calls = d.routes.reduce((a, r) => a + r.n, 0);

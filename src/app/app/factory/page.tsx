@@ -4,10 +4,11 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useApp } from "@/components/app/Shell";
-import { Badge, Button, Empty, Spinner, StatusDot, statusTone } from "@/components/ui/Primitives";
+import { Badge, Button, Empty, StatusDot, statusTone } from "@/components/ui/Primitives";
+import { PageSkeleton, Skeleton } from "@/components/ui/Primitives";
 import { get, type Latest, type Machine } from "@/lib/api";
 
-const LiveFactory = dynamic(() => import("@/components/three/LiveFactory"), { ssr: false, loading: () => <div className="grid h-full place-items-center text-sm text-muted">Loading 3D factory…</div> });
+const LiveFactory = dynamic(() => import("@/components/three/LiveFactory"), { ssr: false, loading: () => <div className="relative h-full w-full"><Skeleton className="h-full rounded-none" /><div className="absolute inset-x-0 bottom-10 flex justify-center gap-8">{[0, 1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-28 w-28 rounded-2xl" />)}</div><p className="absolute inset-x-0 top-1/2 text-center text-sm text-muted">Loading the 3D factory…</p></div> });
 
 export default function FactoryPage() {
   const { subscribe } = useApp();
@@ -26,7 +27,7 @@ export default function FactoryPage() {
     [subscribe],
   );
 
-  if (!machines) return <Spinner />;
+  if (!machines) return <PageSkeleton variant="canvas" />;
   if (machines.length === 0) return <Empty title="No machines to show" body="Onboard a machine and it appears here as a 3D model, coloured by its live status." action={<Link href="/app/onboard"><Button>Onboard a machine</Button></Link>} />;
 
   return (

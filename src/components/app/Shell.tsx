@@ -11,7 +11,7 @@ import { MuseChip } from "@/components/muse/MuseChip";
 import { MuseVoiceBar, MuseVoiceFab } from "@/components/muse/MuseConsole";
 import { MuseLiveProvider } from "@/components/muse/MuseLive";
 import { MuseLogo } from "@/components/muse/MuseLogo";
-import { Badge } from "@/components/ui/Primitives";
+import { Badge, PageSkeleton } from "@/components/ui/Primitives";
 import { useToast } from "@/components/ui/Toast";
 import { fmtAgo, get, post, useLive, type LiveEvent, type Notification, type User } from "@/lib/api";
 
@@ -103,7 +103,12 @@ export function Shell({ children }: { children: ReactNode }) {
   const unread = notifs.filter((n) => !n.read && n.channel === "in_app").length;
   const museLine = MUSE_LINES[Object.keys(MUSE_LINES).filter((k) => pathname === k || (k !== "/app" && pathname.startsWith(k))).sort((a, b) => b.length - a.length)[0] ?? "/app"];
 
-  if (!ctx) return <div className="grid min-h-screen place-items-center text-sm text-muted">Loading your factory…</div>;
+  if (!ctx) return (
+    <div className="flex min-h-screen bg-bg" aria-busy>
+      <div className="hidden w-64 border-r border-line bg-white p-5 lg:block"><div className="skeleton h-8 w-36" /><div className="mt-8 space-y-3">{Array.from({ length: 9 }).map((_, i) => <div key={i} className="skeleton h-9" />)}</div></div>
+      <div className="flex-1"><div className="h-16 border-b border-line bg-white/80 px-6"><div className="skeleton mt-4 h-7 w-48" /></div><div className="p-6"><PageSkeleton variant="overview" /></div></div>
+    </div>
+  );
 
   async function logout() {
     await post("/api/auth/logout");

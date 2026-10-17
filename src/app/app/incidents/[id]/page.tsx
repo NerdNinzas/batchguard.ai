@@ -8,7 +8,8 @@ import { PhotoEvidence } from "@/components/app/PhotoEvidence";
 import { useApp } from "@/components/app/Shell";
 import { Spot, useHighlight } from "@/components/muse/MuseLive";
 import { WorkOrdersBoard } from "@/components/app/WorkOrders";
-import { Badge, Button, Card, Input, Modal, Select, Spinner, statusTone } from "@/components/ui/Primitives";
+import { Badge, Button, Card, Input, Modal, Select, statusTone } from "@/components/ui/Primitives";
+import { PageSkeleton } from "@/components/ui/Primitives";
 import { useToast } from "@/components/ui/Toast";
 import { fmtAgo, fmtTime, get, post, type Cause, type Contact, type Incident, type VoiceCall, type WorkOrder } from "@/lib/api";
 
@@ -39,7 +40,7 @@ export default function IncidentPage() {
   useEffect(() => { load(); }, [load]);
   useEffect(() => subscribe((e) => { if (e.type === "incident" && e.data.id === id) load(); if (e.type === "notification" && e.data.incident_id === id) load(); }), [subscribe, id, load]);
 
-  if (!inc) return <Spinner />;
+  if (!inc) return <PageSkeleton variant="detail" />;
   const r = inc.report;
 
   async function ack() { await post(`/api/incidents/${id}/ack`); toast("success", "Acknowledged", "Escalation stops here."); load(); }

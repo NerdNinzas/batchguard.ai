@@ -9,7 +9,8 @@ import { useApp } from "@/components/app/Shell";
 import { MuseConsole } from "@/components/muse/MuseConsole";
 import { useMuse } from "@/components/muse/MuseLive";
 import { Bars, HealthRing, Sparkline } from "@/components/app/charts";
-import { Badge, Button, Empty, Spinner, StatusDot, statusTone } from "@/components/ui/Primitives";
+import { Badge, Button, Empty, StatusDot, statusTone } from "@/components/ui/Primitives";
+import { PageSkeleton } from "@/components/ui/Primitives";
 import { fmtAgo, fmtTime, get } from "@/lib/api";
 import { machineType } from "@/lib/machineTypes";
 
@@ -65,7 +66,7 @@ export default function OverviewPage() {
     [subscribe, d],
   );
 
-  if (!d) return <Spinner label="Loading your line…" />;
+  if (!d) return <PageSkeleton variant="overview" />;
   const c = d.counts;
   const healthy = c.critical === 0 && c.open_incidents === 0;
   const headline = c.critical ? `${c.critical} machine${c.critical > 1 ? "s" : ""} need${c.critical > 1 ? "" : "s"} attention` : c.open_incidents ? `${c.open_incidents} open warning${c.open_incidents > 1 ? "s" : ""}` : "All machines running normally";

@@ -5,7 +5,8 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useApp } from "@/components/app/Shell";
 import { useHighlight } from "@/components/muse/MuseLive";
-import { Badge, Button, Empty, Spinner, statusTone } from "@/components/ui/Primitives";
+import { Badge, Button, Empty, statusTone } from "@/components/ui/Primitives";
+import { PageSkeleton } from "@/components/ui/Primitives";
 import { fmtAgo, get, type Incident } from "@/lib/api";
 
 export default function IncidentsPage() {
@@ -15,7 +16,7 @@ export default function IncidentsPage() {
   const load = () => get<Incident[]>("/api/incidents?limit=200").then(setItems);
   useEffect(() => { load(); }, []);
   useEffect(() => subscribe((e) => { if (e.type === "incident") load(); }), [subscribe]);
-  if (!items) return <Spinner />;
+  if (!items) return <PageSkeleton variant="rows" />;
   const list = items.filter((i) => filter === "all" || i.status === filter);
   return (
     <div className="space-y-4">

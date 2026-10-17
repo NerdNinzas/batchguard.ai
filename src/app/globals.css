@@ -120,3 +120,7 @@ input[type="range"] { accent-color: var(--blue); }
   100% { background-color: #fffbe6; box-shadow: 0 0 0 3px rgba(250, 204, 21, 0.3); }
 }
 .muse-highlight { animation: muse-hl 1.4s ease-out 3; background-color: #fffbe6 !important; box-shadow: 0 0 0 3px rgba(250, 204, 21, 0.3); border-color: #facc15 !important; }
+
+/* skeleton loading */
+@keyframes skeleton-shimmer { 0% { background-position: -600px 0; } 100% { background-position: 600px 0; } }
+.skeleton { background: linear-gradient(90deg, #e9f0fb 0%, #f7faff 40%, #e9f0fb 80%); background-size: 1200px 100%; animation: skeleton-shimmer 1.6s linear infinite; border-radius: 0.75rem; }
