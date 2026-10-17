@@ -90,6 +90,31 @@ def complete(org: dict[str, Any] = Depends(current_org), user: dict[str, Any] = 
     return {"ok": True}
 
 
+@router.post("/org/purge-telemetry")
+def purge_telemetry(org: dict[str, Any] = Depends(current_org)) -> dict[str, Any]:
+    """Wipe this org's telemetry history and everything derived from it (readings, latest values, events, incidents,
+    investigations, chat, photo evidence, notifications). Machines, contacts, work orders, voice calls and settings stay.
+    Used to start clean when a real device / the virtual simulator takes over from the built-in demo producer."""
+    mids = [r["id"] for r in conn().execute("SELECT id FROM machines WHERE org_id=?", (org["id"],)).fetchall()]
+    counts: dict[str, int] = {}
+    with tx() as c:
+        if mids:
+            ph = ",".join("?" * len(mids))
+            for tbl in ("readings", "latest", "events"):
+                counts[tbl] = c.execute(f"DELETE FROM {tbl} WHERE machine_id IN ({ph})", mids).rowcount
+            iids = [r["id"] for r in c.execute(f"SELECT id FROM incidents WHERE machine_id IN ({ph})", mids).fetchall()]
+            if iids:
+                iph = ",".join("?" * len(iids))
+                for tbl in ("agent_runs", "chat", "evidence"):
+                    counts[tbl] = c.execute(f"DELETE FROM {tbl} WHERE incident_id IN ({iph})", iids).rowcount
+            counts["incidents"] = c.execute(f"DELETE FROM incidents WHERE machine_id IN ({ph})", mids).rowcount
+            c.execute(f"UPDATE machines SET status='offline', health=100, last_seen=NULL WHERE id IN ({ph})", mids)
+        counts["notifications"] = c.execute("DELETE FROM notifications WHERE org_id=?", (org["id"],)).rowcount
+        counts["api_logs"] = c.execute("DELETE FROM api_logs").rowcount
+    cloud.mark_dirty()
+    return {"ok": True, "deleted": counts}
+
+
 # ---------- contacts ----------
 @router.get("/contacts")
 def list_contacts(org: dict[str, Any] = Depends(current_org)) -> list[dict[str, Any]]:
