@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 
 from .. import bus, cloud
 from ..agent.extract import TEMPLATES, extract
-from ..auth import current_org, hash_api_key
+from ..auth import current_org, current_user, hash_api_key
 from ..config import settings
 from ..db import conn, j, row, rows, tx, uj
 from ..ids import new_api_key, new_device_id, new_id, now
@@ -212,6 +212,15 @@ def rotate_key(mid: str, org: dict[str, Any] = Depends(current_org)) -> dict[str
         raise HTTPException(409, "Verify the machine first")
     key = _issue_key(mid)
     return {"api_key": key, "api_key_prefix": key[:12], "code": _code_samples(_get(org["id"], mid), key)}
+
+
+@router.post("/{mid}/restart")
+def restart_machine(mid: str, org: dict[str, Any] = Depends(current_org), user: dict[str, Any] = Depends(current_user)) -> dict[str, Any]:
+    from .. import shutdown as _sd
+
+    m = _get(org["id"], mid)
+    cmd = _sd.restart(m, user.get("email") or "user")
+    return {"ok": True, "command": cmd["id"]}
 
 
 @router.delete("/{mid}")

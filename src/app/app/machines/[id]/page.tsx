@@ -1,7 +1,7 @@
 "use client";
 /* eslint-disable @next/next/no-img-element */
 
-import { ClipboardList, KeyRound, RefreshCw, Siren, Trash2, TrendingDown, TrendingUp } from "lucide-react";
+import { ClipboardList, KeyRound, Power, RefreshCw, Siren, Trash2, TrendingDown, TrendingUp } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
@@ -111,6 +111,12 @@ export default function MachinePage() {
         </div>
       </div>
 
+      {m.status === "shutdown" && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-violet/50 bg-violet/10 p-4">
+          <div><p className="flex items-center gap-2 font-semibold text-violet"><Power size={16} /> Shut down by Muse</p><p className="text-sm text-ink">Nobody acknowledged the incident or answered the call in time, so the machine was stopped. Restart it once a qualified person has checked it.</p></div>
+          <Button onClick={async () => { await post(`/api/machines/${id}/restart`); toast("success", "Restart sent", "Telemetry resumes when the machine comes back."); load(); }}><Power size={14} /> Restart machine</Button>
+        </div>
+      )}
       <div className="flex items-center gap-2">
         <span className="text-xs text-muted">Window</span>
         {[120, 600, 1800, 3600].map((s) => (

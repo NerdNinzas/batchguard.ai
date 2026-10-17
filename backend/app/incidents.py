@@ -26,8 +26,11 @@ def _open_incident_for(machine_id: str) -> dict[str, Any] | None:
 
 
 def _recent_signal(incident: dict[str, Any], sig: Signal, t: float) -> bool:
+    """Same parameter + layer inside the cooldown is a repeat — unless it is MORE severe (warning → critical must attach)."""
     for s in uj(incident.get("signals"), []):
         if s.get("parameter") == sig.parameter and s.get("layer") == sig.layer and t - s.get("ts", 0) < settings.incident_cooldown_seconds:
+            if SEVERITY_RANK.get(sig.severity, 0) > SEVERITY_RANK.get(s.get("severity", "info"), 0):
+                return False
             return True
     return False
 
@@ -88,6 +91,9 @@ def handle_signals(machine_id: str, signals: list[Signal]) -> None:
         cloud.mirror("incidents", inc["id"], inc)
         notify.on_incident_opened(inc, m)
         _kick_agent(inc_id)
+        from . import shutdown as _sd
+
+        _sd.arm(inc)
         return
 
     # attach to the open incident; warning+ signals mean the machine is still abnormal (even inside the cooldown).
@@ -118,6 +124,9 @@ def handle_signals(machine_id: str, signals: list[Signal]) -> None:
     if SEVERITY_RANK[new_sev] > SEVERITY_RANK[old_sev]:
         notify.on_incident_escalated(inc, m)
         _kick_agent(inc["id"])
+        from . import shutdown as _sd
+
+        _sd.arm(inc)
 
 
 def _kick_agent(incident_id: str) -> None:
@@ -132,6 +141,9 @@ def acknowledge(incident_id: str, by: str) -> dict[str, Any]:
             "UPDATE incidents SET status='acknowledged', acknowledged_at=?, acknowledged_by=? WHERE id=? AND status='open'",
             (now(), by, incident_id),
         )
+    from . import shutdown as _sd
+
+    _sd.cancel(incident_id, f"Acknowledged by {by}")
     inc = row(conn().execute("SELECT * FROM incidents WHERE id=?", (incident_id,)).fetchone())
     if inc:
         bus.publish(inc["org_id"], "incident", {**inc, "signals": uj(inc["signals"], [])})
@@ -142,6 +154,9 @@ def resolve(incident_id: str, feedback: dict[str, Any] | None, reason: str | Non
     inc = row(conn().execute("SELECT * FROM incidents WHERE id=?", (incident_id,)).fetchone())
     if not inc:
         return {}
+    from . import shutdown as _sd
+
+    _sd.cancel(incident_id, f"Incident resolved ({reason or 'manual'})")
     with tx() as c:
         c.execute(
             "UPDATE incidents SET status='resolved', resolved_at=?, feedback=?, resolved_reason=? WHERE id=?",
@@ -217,10 +232,10 @@ def resume_from_stale(machine_id: str) -> None:
 def staleness_sweep() -> None:
     """Machines that stop posting for STALE_AFTER_SECONDS become 'stale' and open an incident."""
     t = now()
-    if t - _STARTED_AT < 30:  # grace after a restart: devices reconnect, the demo producer warms up
+    if t - _STARTED_AT < 90:  # grace after a restart/redeploy: devices and the simulator reconnect and re-issue keys
         return
     for m in rows(conn().execute("SELECT * FROM machines WHERE verified=1").fetchall()):
-        if m["last_seen"] is None:
+        if m["last_seen"] is None or m["status"] == "shutdown":  # a machine Muse stopped is silent on purpose
             continue
         stale = t - m["last_seen"] > settings.stale_after_seconds
         if stale and m["status"] not in ("stale", "offline"):

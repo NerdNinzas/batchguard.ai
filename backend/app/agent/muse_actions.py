@@ -254,7 +254,42 @@ def make_action_tools(org_id: str, user: dict[str, Any], emit: Callable[[dict[st
         label = f"Calling {ct['name'] if ct else to} · {c.get('title')}" + (f" · from {c.get('from_number')}" if c.get("from_number") else "")
         return edited("call", label, "/app/voice", "history", {"call": {"id": c["id"], "status": c["status"], "to": c["to_number"], "run": c.get("run_name")}})
 
+    # ---------------- shutdown / restart ----------------
+    def shutdown_machine(machine: str, reason: str = "requested by the owner") -> dict[str, Any]:
+        from .. import shutdown as _sd
+
+        m = _find_machine(org_id, machine)
+        if not m:
+            return {"error": f"no machine matching '{machine}'"}
+        inc = row(conn().execute("SELECT * FROM incidents WHERE machine_id=? AND status IN ('open','acknowledged') ORDER BY opened_at DESC LIMIT 1", (m["id"],)).fetchone())
+        _sd.send_command(m, "shutdown", f"Shutdown by Muse: {reason}", inc["id"] if inc else None)
+        with tx() as c:
+            c.execute("UPDATE machines SET status='shutdown', health=20 WHERE id=?", (m["id"],))
+            if inc:
+                c.execute("UPDATE incidents SET shutdown_state='done', shutdown_at=? WHERE id=?", (now(), inc["id"]))
+        bus.publish(org_id, "machine", {"id": m["id"], "status": "shutdown", "health": 20, "action": "shutdown", "reason": reason})
+        return edited("machine", f"Shut down {m['name']} — {reason}", f"/app/machines/{m['id']}", None, {"machine": m["name"], "status": "shutdown"})
+
+    def restart_machine(machine: str) -> dict[str, Any]:
+        from .. import shutdown as _sd
+
+        m = _find_machine(org_id, machine)
+        if not m:
+            return {"error": f"no machine matching '{machine}'"}
+        _sd.restart(m, user.get("name") or by)
+        return edited("machine", f"Restart sent to {m['name']}", f"/app/machines/{m['id']}", None, {"machine": m["name"], "status": "restarting"})
+
+    def cancel_shutdown(incident_id: str) -> dict[str, Any]:
+        from .. import shutdown as _sd
+
+        inc = row(conn().execute("SELECT * FROM incidents WHERE id=? AND org_id=?", (incident_id, org_id)).fetchone())
+        if not inc:
+            return {"error": "incident not found"}
+        _sd.cancel(incident_id, f"Cancelled by {user.get('name') or by} via Muse")
+        return edited("incident", f"Auto-shutdown cancelled for {inc['title']}", f"/app/incidents/{incident_id}", None, {"incident": incident_id})
+
     impls = {
+        "shutdown_machine": shutdown_machine, "restart_machine": restart_machine, "cancel_shutdown": cancel_shutdown,
         "place_call": place_call,
         "add_contact": add_contact, "update_contact": update_contact, "delete_contact": delete_contact, "update_org": update_org,
         "update_machine": update_machine, "update_parameter_limits": update_parameter_limits, "create_work_order": create_work_order,
@@ -262,6 +297,12 @@ def make_action_tools(org_id: str, user: dict[str, Any], emit: Callable[[dict[st
     }
     S = types.Schema
     decls = [
+        types.FunctionDeclaration(name="shutdown_machine", description="Send a shutdown command to a machine (the device stops; telemetry pauses). Confirm with the user first unless it is an emergency.",
+                                  parameters=S(type="OBJECT", properties={"machine": S(type="STRING"), "reason": S(type="STRING")}, required=["machine"])),
+        types.FunctionDeclaration(name="restart_machine", description="Send a start command to a machine that was shut down.",
+                                  parameters=S(type="OBJECT", properties={"machine": S(type="STRING")}, required=["machine"])),
+        types.FunctionDeclaration(name="cancel_shutdown", description="Stop the auto-shutdown countdown on an incident without acknowledging it.",
+                                  parameters=S(type="OBJECT", properties={"incident_id": S(type="STRING")}, required=["incident_id"])),
         types.FunctionDeclaration(name="place_call", description="Place a real phone call through Muse's voice line (Gemini Live over TeleCMI). call_type: critical_alert | emergency_escalation | warning_notice | resolution_followup | test_call. Give a contact (name/role) or an explicit phone number; pass incident_id so the brief comes from that incident's report. Confirm the number with the user before calling.",
                                   parameters=S(type="OBJECT", properties={"call_type": S(type="STRING"), "contact": S(type="STRING"), "phone": S(type="STRING"), "incident_id": S(type="STRING")})),
         types.FunctionDeclaration(name="add_contact", description="Add an escalation contact (name required; role, phone in international format, email, escalation_order 1=first to be called, quiet hours HH:MM).",

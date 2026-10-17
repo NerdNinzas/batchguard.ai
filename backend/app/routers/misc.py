@@ -130,8 +130,10 @@ def overview(org: dict[str, Any] = Depends(current_org)) -> dict[str, Any]:
                    "open_incidents": len(open_inc),
                    # machine-specific: a machine counts once, however many incidents it has
                    "critical": sum(1 for m in machines if m["status"] == "critical" or any(i["machine_id"] == m["id"] and i["severity"] in ("critical", "emergency") for i in open_inc)),
-                   "attention": [{"id": m["id"], "name": m["name"], "status": m["status"]} for m in machines
-                                 if m["status"] in ("critical", "warning", "stale", "offline") or any(i["machine_id"] == m["id"] for i in open_inc)],
+                   "attention": [{"id": m["id"], "name": m["name"], "status": m["status"],
+                                  "shutdown_at": next((i.get("shutdown_at") for i in open_inc if i["machine_id"] == m["id"] and i.get("shutdown_state") in ("pending", "warned")), None),
+                                  "incident_id": next((i["id"] for i in open_inc if i["machine_id"] == m["id"]), None)} for m in machines
+                                 if m["status"] in ("critical", "warning", "stale", "offline", "shutdown") or any(i["machine_id"] == m["id"] for i in open_inc)],
                    "readings_per_min": rate, "mean_ack_seconds": round(sum(ack_times) / len(ack_times)) if ack_times else None},
         "open_incidents": [{**i, "signals": uj(i["signals"], []), "report": None} for i in open_inc[:10]],
         "incidents_per_hour": list(reversed(buckets)),

@@ -2,7 +2,7 @@
 /* eslint-disable @next/next/no-img-element */
 
 import { motion } from "framer-motion";
-import { Activity, ArrowRight, Bot, CheckCircle2, Clock, Cpu, PhoneCall, ShieldCheck, Siren, Users, Zap } from "lucide-react";
+import { Activity, ArrowRight, Bot, CheckCircle2, Clock, Cpu, PhoneCall, Power, ShieldAlert, ShieldCheck, Siren, Users, Zap } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useApp } from "@/components/app/Shell";
@@ -11,7 +11,8 @@ import { useMuse } from "@/components/muse/MuseLive";
 import { Bars, HealthRing, Sparkline } from "@/components/app/charts";
 import { Badge, Button, Empty, StatusDot, statusTone } from "@/components/ui/Primitives";
 import { PageSkeleton } from "@/components/ui/Primitives";
-import { cached, fmtAgo, fmtTime, get } from "@/lib/api";
+import { cached, fmtAgo, fmtCountdown, fmtTime, get } from "@/lib/api";
+import { useNow } from "@/lib/useNow";
 import { machineType } from "@/lib/machineTypes";
 
 type Spark = { parameter: string; unit?: string | null; points: number[]; latest: Record<string, { value: number; unit?: string | null; state: string }> };
@@ -23,7 +24,7 @@ type Overview = {
   agent_runs: { source: string; ok: number; started_at: number; finished_at?: number | null; title: string }[];
   contacts: number;
   org: { name: string; industry?: string | null; timezone?: string | null };
-  counts: { machines: number; online: number; open_incidents: number; critical: number; attention: { id: string; name: string; status: string }[]; readings_per_min: number; mean_ack_seconds: number | null; resolved_24h: number };
+  counts: { machines: number; online: number; open_incidents: number; critical: number; attention: { id: string; name: string; status: string; shutdown_at?: number | null; incident_id?: string | null }[]; readings_per_min: number; mean_ack_seconds: number | null; resolved_24h: number };
   incidents_per_hour: number[];
   gemini_enabled: boolean;
 };
@@ -71,8 +72,10 @@ export default function OverviewPage() {
   const healthy = c.critical === 0 && c.open_incidents === 0;
   const att = c.attention ?? [];
   const down = att.filter((m) => m.status === "stale" || m.status === "offline");
+  const countdowns = att.filter((m) => m.shutdown_at);
+  const shut = att.filter((m) => m.status === "shutdown");
   const headline = att.length === 0 ? "All machines running normally"
-    : att.length === 1 ? `${att[0].name} ${att[0].status === "stale" || att[0].status === "offline" ? "is down" : "needs attention"}`
+    : att.length === 1 ? `${att[0].name} ${att[0].status === "stale" || att[0].status === "offline" ? "is down" : att[0].status === "shutdown" ? "was shut down by Muse" : "needs attention"}`
     : att.length <= 3 ? `${att.map((m) => m.name).slice(0, -1).join(", ")} and ${att[att.length - 1].name} need attention`
     : down.length === att.length ? `${att.length} machines are down` : `${att.length} machines need attention`;
   const hour = new Date().getHours();
@@ -96,6 +99,12 @@ export default function OverviewPage() {
             <p className="mt-3 max-w-xl text-sm text-white/75">
               Muse is watching {c.machines} machine{c.machines === 1 ? "" : "s"} across {d.org.industry ?? "your"} line — {c.readings_per_min.toLocaleString()} readings in the last minute, {d.contacts} contact{d.contacts === 1 ? "" : "s"} on the escalation ladder, {d.gemini_enabled ? "Gemini investigations on" : "rule-based investigations on"}.
             </p>
+            {(countdowns.length > 0 || shut.length > 0) && (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {countdowns.map((m) => <Link key={m.id} href={`/app/incidents/${m.incident_id}`} className="inline-flex items-center gap-1.5 rounded-full border border-red/50 bg-red/20 px-3 py-1 text-xs font-semibold text-white"><ShieldAlert size={12} /> {m.name}: shutdown in <HeroCountdown ts={m.shutdown_at} /> unless acknowledged</Link>)}
+                {shut.map((m) => <Link key={m.id} href={`/app/machines/${m.id}`} className="inline-flex items-center gap-1.5 rounded-full border border-violet/60 bg-violet/25 px-3 py-1 text-xs font-semibold text-white"><Power size={12} /> {m.name}: shut down by Muse · restart from its page</Link>)}
+              </div>
+            )}
             <div className="mt-5 flex flex-wrap gap-2">
               <Link href="/app/incidents"><Button variant={c.open_incidents ? "danger" : "secondary"} size="sm" className={c.open_incidents ? "" : "!border-white/20 !bg-white/10 !text-white hover:!bg-white/20"}><Siren size={14} /> {c.open_incidents ? `Open incidents (${c.open_incidents})` : "Incident history"}</Button></Link>
               <Link href="/app/factory"><Button size="sm" className="!bg-white !text-ink hover:!bg-white/90">3D factory <ArrowRight size={14} /></Button></Link>
@@ -232,4 +241,10 @@ function Stat({ icon: Icon, tone, label, value, sub }: { icon: typeof Activity; 
       <div className="min-w-0"><p className="font-mono text-[10px] uppercase tracking-wider text-muted">{label}</p><p className="font-display text-2xl font-semibold leading-none text-ink">{value}</p>{sub && <p className="truncate text-[11px] text-muted">{sub}</p>}</div>
     </div>
   );
+}
+
+
+function HeroCountdown({ ts }: { ts?: number | null }) {
+  const now = useNow();
+  return <span className="font-mono tabular-nums">{now ? fmtCountdown(ts, now) : "–:––"}</span>;
 }

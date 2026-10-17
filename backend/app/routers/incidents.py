@@ -36,10 +36,19 @@ def _get(org_id: str, iid: str) -> dict[str, Any]:
 
 
 @router.get("")
-def list_incidents(status: str | None = None, limit: int = 100, org: dict[str, Any] = Depends(current_org)) -> list[dict[str, Any]]:
+def list_incidents(status: str | None = None, limit: int = 100, brief: int = 1, org: dict[str, Any] = Depends(current_org)) -> list[dict[str, Any]]:
+    """List incidents. `brief=1` (default) trims each report to its ranked causes + first check so lists stay small."""
     q = "SELECT * FROM incidents WHERE org_id=?" + (" AND status=?" if status else "") + " ORDER BY opened_at DESC LIMIT ?"
     args: tuple = (org["id"], status, limit) if status else (org["id"], limit)
-    return [_out(i) for i in rows(conn().execute(q, args).fetchall())]
+    out = [_out(i) for i in rows(conn().execute(q, args).fetchall())]
+    if brief:
+        for o in out:
+            r = o.get("report")
+            if r:
+                checks = sorted(r.get("checks") or [], key=lambda c: c.get("order", 99))
+                o["report"] = {"summary": (r.get("summary") or "")[:200], "severity": r.get("severity"), "causes": [{"name": c.get("name"), "support": c.get("support")} for c in (r.get("causes") or [])[:3]],
+                               "checks": checks[:1], "timeline": [], "missing_data": [], "call_script": ""}
+    return out
 
 
 @router.get("/{iid}")
@@ -58,6 +67,15 @@ def get_incident(iid: str, org: dict[str, Any] = Depends(current_org)) -> dict[s
 def ack(iid: str, org: dict[str, Any] = Depends(current_org), user: dict[str, Any] = Depends(current_user)) -> dict[str, Any]:
     _get(org["id"], iid)
     return _out(acknowledge(iid, user["email"]))
+
+
+@router.post("/{iid}/cancel-shutdown")
+def cancel_shutdown(iid: str, org: dict[str, Any] = Depends(current_org), user: dict[str, Any] = Depends(current_user)) -> dict[str, Any]:
+    from .. import shutdown as _sd
+
+    _get(org["id"], iid)
+    _sd.cancel(iid, f"Cancelled by {user.get('email') or 'user'}")
+    return _out(_get(org["id"], iid))
 
 
 @router.post("/{iid}/resolve")

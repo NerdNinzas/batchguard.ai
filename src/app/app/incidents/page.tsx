@@ -7,7 +7,8 @@ import { useApp } from "@/components/app/Shell";
 import { useHighlight } from "@/components/muse/MuseLive";
 import { Badge, Button, Empty, statusTone } from "@/components/ui/Primitives";
 import { PageSkeleton } from "@/components/ui/Primitives";
-import { cached, fmtAgo, get, type Incident } from "@/lib/api";
+import { cached, fmtAgo, fmtCountdown, get, type Incident } from "@/lib/api";
+import { useNow } from "@/lib/useNow";
 
 export default function IncidentsPage() {
   const { subscribe } = useApp();
@@ -42,8 +43,16 @@ function IncidentRow({ i }: { i: Incident }) {
                 <p className="truncate font-semibold text-ink">{i.title}</p>
                 <p className="text-xs text-muted">{i.machine?.name} · {fmtAgo(i.opened_at)} · {i.signals.length} signal(s){i.report ? ` · top cause: ${i.report.causes[0]?.name} (${i.report.causes[0]?.support})` : " · investigating…"}</p>
               </div>
+              {i.shutdown_state === "done" && <Badge tone="violet">shut down by Muse</Badge>}
+              {(i.shutdown_state === "pending" || i.shutdown_state === "warned") && <Countdown ts={i.shutdown_at} />}
               <Badge tone={statusTone(i.severity)}>{i.severity}</Badge>
               <Badge tone={statusTone(i.status)}>{i.status === "resolved" && i.resolved_reason === "back to normal" ? "resolved · back to normal" : i.resolved_reason === "back online" ? "resolved · back online" : i.status}</Badge>
     </Link>
   );
+}
+
+
+function Countdown({ ts }: { ts?: number | null }) {
+  const now = useNow();
+  return <Badge tone="red">shutdown in {now ? fmtCountdown(ts, now) : "–:––"}</Badge>;
 }

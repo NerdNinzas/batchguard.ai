@@ -37,6 +37,19 @@ def _record(org_id: str, incident_id: str | None, channel: str, contact: dict[st
     return n
 
 
+def record(org_id: str, incident_id: str | None, channel: str, contact: dict[str, Any] | None, subject: str, body: str, status: str) -> dict[str, Any]:
+    return _record(org_id, incident_id, channel, contact, subject, body, status)
+
+
+def on_shutdown(inc: dict[str, Any], m: dict[str, Any], reason: str) -> None:
+    org_id = inc["org_id"]
+    _record(org_id, inc["id"], "in_app", None, f"Emergency shutdown: {m.get('name')}", reason, "delivered")
+    for ct in _contacts(org_id)[:3]:
+        if ct.get("email"):
+            subj, html_body = mail.shutdown(inc, m, reason, ct)
+            _record(org_id, inc["id"], "email", ct, subj, reason, send_email(ct["email"], subj, html_body))
+
+
 def send_email(to_addr: str, subject: str, html_body: str) -> str:
     return mail.send(to_addr, subject, html_body)
 

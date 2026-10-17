@@ -19,6 +19,7 @@ Built for the **Google Cloud AI Builder Cup 2026 · Manufacturing** theme on Goo
 | Forecast | Predicted time to warning / critical per parameter, on machine cards and charts |
 | Investigation | Google ADK pipeline (parallel evidence gathering → hypotheses → evaluation → checks → report) with a number guardrail |
 | Escalation | Dashboard → email (Resend, Muse templates) → voice call (Gemini Live over TeleCMI via Dograh) → next contact until acknowledged |
+| Auto-shutdown | If a critical incident is not acknowledged and no call is answered within the window (default 5 min), Muse sends the machine a `shutdown` command, with a live countdown on the incident and overview; restart from the machine page after a check |
 | Action | Photo evidence read by Gemini vision, work-order Kanban per machine, feedback loop on resolution |
 | Muse copilot | ChatGPT-style streaming chat, realtime Indian-English voice, and voice/chat navigation that spotlights any part of the dashboard |
 | Visibility | Live 3D factory, workflow node builder, telemetry table, observability, blind evaluation scoreboard |
@@ -107,7 +108,7 @@ curl -X POST http://localhost:8000/v1/telemetry \
   -d '{"device_id":"main-conveyor-41y","readings":[{"parameter":"motor_temp","value":71.2,"unit":"C"}]}'
 ```
 
-Readings are validated against the verified spec (unknown parameters and mismatched units are rejected), de-duplicated by `reading_id`, and answered with the detection signals they produced. `backend/scripts/device_sample.py` is a reference device; `trigger_fault.py` injects a bearing-wear ramp.
+Readings are validated against the verified spec (unknown parameters and mismatched units are rejected), de-duplicated by `reading_id`, and answered with the detection signals they produced. Devices also poll `GET /v1/commands?device_id=…` (same key) for `shutdown` / `start` commands and acknowledge them with `POST /v1/commands/{id}/ack`; the virtual simulator does this every 3 s. `backend/scripts/device_sample.py` is a reference device; `trigger_fault.py` injects a bearing-wear ramp.
 
 ---
 

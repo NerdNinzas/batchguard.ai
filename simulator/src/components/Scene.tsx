@@ -16,7 +16,7 @@ const MODEL: Record<string, { name: string; scale: number; y?: number }> = {
 Object.values(MODEL).forEach((m) => useGLTF.preload(`${KIT}${m.name}.glb`));
 useGLTF.preload(`${KIT}box-small.glb`);
 
-const COLOR: Record<Status, string> = { normal: "#22c55e", warning: "#f59e0b", critical: "#ef4444", stopped: "#64748b" };
+const COLOR: Record<Status, string> = { normal: "#22c55e", warning: "#f59e0b", critical: "#ef4444", stopped: "#64748b", shutdown: "#a855f7" };
 
 /** how hot / shaky a machine looks, 0..1, from its parameters relative to limits */
 function stress(m: SimMachine) {
@@ -67,7 +67,7 @@ function Machine({ m, x, selected, onSelect }: { m: SimMachine; x: number; selec
       <Html position={[0, m.type === "conveyor" ? 1.9 : 3.9, 0]} center distanceFactor={14} style={{ pointerEvents: "none" }}>
         <div style={{ background: "rgba(7,17,31,.85)", border: `1px solid ${c}`, borderRadius: 12, padding: "6px 10px", color: "#e8f0ff", fontSize: 12, whiteSpace: "nowrap", fontFamily: "system-ui" }}>
           <div style={{ fontWeight: 700 }}>{m.name}</div>
-          <div style={{ fontFamily: "ui-monospace, monospace", fontSize: 10, color: c }}>{st.toUpperCase()}{m.fault ? ` · ${m.fault.replace(/_/g, " ")}` : ""}</div>
+          <div style={{ fontFamily: "ui-monospace, monospace", fontSize: 10, color: c }}>{st === "shutdown" ? "SHUT DOWN BY BATCHGUARD" : st.toUpperCase()}{m.fault ? ` · ${m.fault.replace(/_/g, " ")}` : ""}</div>
         </div>
       </Html>
     </group>

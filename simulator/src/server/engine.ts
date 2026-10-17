@@ -18,6 +18,7 @@ export type SimMachine = {
   running: boolean;           // false → stops posting (sensor/gateway dropout → BatchGuard marks it stale)
   speed: number;              // production speed factor 0.2–1.5 (affects throughput-ish parameters)
   fault: string | null;       // active preset name
+  shutdown: { reason: string; at: number; by: string } | null;  // stopped by BatchGuard's auto-shutdown
   key: string | null;
   last_post?: { ok: boolean; ms: number; at: number; signals: number; error?: string };
   counters: Record<string, number>;
@@ -127,7 +128,7 @@ class Engine {
         next.push(prev);
         continue;
       }
-      const sm: SimMachine = { id: m.id, name: m.name, type: m.type, device_id: m.device_id, location: m.location, params: m.parameters, values: {}, clean: {}, controls: {}, running: true, speed: 1, fault: null, key: null, counters: {} };
+      const sm: SimMachine = { id: m.id, name: m.name, type: m.type, device_id: m.device_id, location: m.location, params: m.parameters, values: {}, clean: {}, controls: {}, running: true, speed: 1, fault: null, shutdown: null, key: null, counters: {} };
       for (const p of m.parameters) { sm.clean[p.name] = mid(p); sm.values[p.name] = mid(p); }
       await this.issueKey(sm);
       next.push(sm);
@@ -188,8 +189,24 @@ class Engine {
     }
   }
 
+  private cmdTick = 0;
+  async pollCommands(m: SimMachine) {
+    if (!m.key) return;
+    try {
+      const res = await fetch(`${BG}/v1/commands?device_id=${encodeURIComponent(m.device_id)}`, { headers: { "X-Device-Key": m.key } });
+      if (!res.ok) return;
+      const body = (await res.json()) as { commands: { id: string; type: string; reason: string }[] };
+      for (const c of body.commands ?? []) {
+        if (c.type === "shutdown") { m.running = false; m.controls = {}; m.fault = null; m.shutdown = { reason: c.reason, at: now(), by: "BatchGuard · Muse" }; this.push(`${m.name} · SHUT DOWN by BatchGuard: ${c.reason}`, "red"); }
+        else if (c.type === "start") { m.running = true; m.shutdown = null; this.push(`${m.name} · restarted by BatchGuard (${c.reason})`, "green"); }
+        await fetch(`${BG}/v1/commands/${c.id}/ack`, { method: "POST", headers: { "Content-Type": "application/json", "X-Device-Key": m.key }, body: JSON.stringify({ device_id: m.device_id }) }).catch(() => {});
+      }
+    } catch { /* transient */ }
+  }
+
   async tick() {
     if (!this.connected) return;
+    if (++this.cmdTick % 3 === 0) await Promise.all(this.machines.map((m) => this.pollCommands(m)));
     if (this.machines.some((m) => !m.key)) this.reissueKeys().catch(() => {});
     this.postsLastMin = this.postsLastMin.filter((t) => now() - t < 60);
     await Promise.all(this.machines.map(async (m) => { this.step(m); if (m.running) await this.post(m); }));
@@ -213,7 +230,7 @@ class Engine {
     const m = this.get(id); const f = PRESETS.find((x) => x.key === key); if (!f) throw new Error("unknown preset");
     f.apply(m); m.fault = key; this.push(`${m.name} · fault injected: ${f.label}`, "red");
   }
-  setRunning(id: string, running: boolean) { const m = this.get(id); m.running = running; this.push(`${m.name} · ${running ? "started — telemetry resumes" : "stopped — no telemetry (BatchGuard will see it go stale)"}`, running ? "green" : "amber"); }
+  setRunning(id: string, running: boolean) { const m = this.get(id); m.running = running; if (running) m.shutdown = null; this.push(`${m.name} · ${running ? "started — telemetry resumes" : "stopped — no telemetry (BatchGuard will see it go stale)"}`, running ? "green" : "amber"); }
   setSpeed(id: string, speed: number) { const m = this.get(id); m.speed = Math.max(0.2, Math.min(1.5, speed)); }
   allNormal() { for (const m of this.machines) { m.controls = {}; m.fault = null; m.running = true; m.speed = 1; } this.push("Whole line reset to normal", "green"); }
 
@@ -241,7 +258,7 @@ class Engine {
     return {
       connected: this.connected, backend: BG, dashboard: process.env.NEXT_PUBLIC_DASHBOARD_URL || "http://localhost:3000", posts: this.posts, posts_per_min: this.postsLastMin.length,
       uptime_s: Math.round(now() - this.startedAt), error: this.lastError, presets: PRESETS.map(({ key, label, types, description }) => ({ key, label, types, description })),
-      machines: this.machines.map((m) => ({ id: m.id, name: m.name, type: m.type, device_id: m.device_id, location: m.location, params: m.params, values: m.values, clean: m.clean, controls: m.controls, running: m.running, speed: m.speed, fault: m.fault, has_key: !!m.key, last_post: m.last_post })),
+      machines: this.machines.map((m) => ({ id: m.id, name: m.name, type: m.type, device_id: m.device_id, location: m.location, params: m.params, values: m.values, clean: m.clean, controls: m.controls, running: m.running, speed: m.speed, fault: m.fault, shutdown: m.shutdown, has_key: !!m.key, last_post: m.last_post })),
       log: this.log.slice(0, 40),
     };
   }

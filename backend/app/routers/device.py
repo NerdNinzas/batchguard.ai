@@ -74,3 +74,20 @@ def events(body: EventIn, x_device_key: str | None = Header(default=None)) -> di
 def ping(x_device_key: str | None = Header(default=None), device_id: str = "") -> dict[str, Any]:
     m = _device(device_id, x_device_key)
     return {"ok": True, "machine": m["name"], "parameters": [r["name"] for r in conn().execute("SELECT name FROM parameters WHERE machine_id=?", (m["id"],)).fetchall()]}
+
+
+# ---------- commands (device polls; Muse's auto-shutdown and restarts arrive here) ----------
+@router.get("/commands")
+def commands(device_id: str, x_device_key: str | None = Header(default=None)) -> dict[str, Any]:
+    from .. import shutdown as _sd
+
+    m = _device(device_id, x_device_key)
+    return {"commands": [{"id": c["id"], "type": c["type"], "reason": c["reason"], "payload": c["payload"], "created_at": c["created_at"]} for c in _sd.pending_for(m["id"])]}
+
+
+@router.post("/commands/{cmd_id}/ack")
+def ack_command(cmd_id: str, body: dict[str, Any], x_device_key: str | None = Header(default=None)) -> dict[str, Any]:
+    from .. import shutdown as _sd
+
+    m = _device(str(body.get("device_id", "")), x_device_key)
+    return {"ok": _sd.ack(m["id"], cmd_id)}

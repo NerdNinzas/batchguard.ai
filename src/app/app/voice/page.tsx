@@ -453,6 +453,15 @@ export default function VoicePage() {
               </button>
             </div>
             <p className="mt-2 text-[11px] text-muted">{status.settings.auto_dial ? "ON — real calls go out on every critical incident. Keep it off while the demo producer is injecting faults unless the contacts are yours." : "Off — calls are placed manually from an incident page or from a call type below."}</p>
+            <div className="mt-4 flex items-start justify-between gap-4 border-t border-line pt-4">
+              <div>
+                <p className="text-sm font-semibold text-ink">Auto-shutdown when nobody responds</p>
+                <p className="text-sm text-muted">If a critical incident is not acknowledged and no call is answered within <input type="number" min={1} max={60} value={Math.round((status.settings.shutdown_after_seconds ?? 300) / 60)} onChange={(e) => put<VoiceStatus["settings"]>("/api/voice/settings", { shutdown_after_seconds: Number(e.target.value) * 60 }).then((st) => setStatus((s) => (s ? { ...s, settings: st } : s)))} className="mx-1 w-14 rounded-lg border border-line px-2 py-0.5 text-center font-mono text-xs" /> minutes, Muse shuts the machine down and says why. A live countdown shows on the incident and the overview.</p>
+              </div>
+              <button onClick={async () => { const st = await put<VoiceStatus["settings"]>("/api/voice/settings", { auto_shutdown: !status.settings.auto_shutdown }); setStatus((s) => (s ? { ...s, settings: st } : s)); }} role="switch" aria-checked={!!status.settings.auto_shutdown} className={`relative h-7 w-12 shrink-0 rounded-full transition ${status.settings.auto_shutdown ? "bg-violet" : "bg-line"}`}>
+                <span className={`absolute top-0.5 h-6 w-6 rounded-full bg-white shadow transition ${status.settings.auto_shutdown ? "left-[22px]" : "left-0.5"}`} />
+              </button>
+            </div>
           </Card></Spot>
           <Spot k="workflows"><Card title={<span className="flex items-center gap-2"><CloudUpload size={18} className="text-blue" /> Dograh workflows</span>} action={<Button size="sm" variant="secondary" onClick={() => sync()} loading={syncing === "all"}><RefreshCw size={14} /> Publish all</Button>}>
             <ul className="space-y-1.5">

@@ -90,6 +90,8 @@ class SettingsIn(BaseModel):
     telephony_configuration_id: int | None = None
     from_phone_number_id: int | None = None
     auto_dial: bool | None = None
+    auto_shutdown: bool | None = None
+    shutdown_after_seconds: int | None = None
 
 
 @router.put("/settings")
@@ -105,6 +107,10 @@ def put_settings(body: SettingsIn, org: dict[str, Any] = Depends(current_org)) -
         patch["telephony_configuration_id"] = body.telephony_configuration_id
     if body.auto_dial is not None:
         patch["auto_dial"] = 1 if body.auto_dial else 0
+    if body.auto_shutdown is not None:
+        patch["auto_shutdown"] = 1 if body.auto_shutdown else 0
+    if body.shutdown_after_seconds is not None:
+        patch["shutdown_after_seconds"] = max(60, min(3600, int(body.shutdown_after_seconds)))
     return calls.save_settings(org["id"], patch)
 
 

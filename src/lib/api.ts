@@ -118,7 +118,7 @@ export type Cause = { name: string; support: string; rationale: string; evidence
 export type Report = { summary: string; severity: string; timeline: { t: string; what: string }[]; causes: Cause[]; checks: { order: number; action: string; discriminates: string; safety: string }[]; missing_data: string[]; call_script: string; cross_machine?: string | null; guardrail?: { unverified_numbers_removed: string[]; schema: string }; photo_evidence?: { id: string; caption?: string | null; description?: string; confidence?: string; safety_flags?: string[] }[] };
 export type Incident = {
   id: string; org_id: string; machine_id: string; severity: string; status: string; title: string; opened_at: number; acknowledged_at?: number | null;
-  acknowledged_by?: string | null; resolved_at?: number | null; resolved_reason?: string | null; signals: Signal[]; report: Report | null; report_source?: string | null;
+  acknowledged_by?: string | null; resolved_at?: number | null; resolved_reason?: string | null; shutdown_at?: number | null; shutdown_state?: "pending" | "warned" | "done" | "cancelled" | null; signals: Signal[]; report: Report | null; report_source?: string | null;
   feedback?: { verdict: string; actual_cause: string; fix: string } | null; escalation_level: number; machine?: { name: string; device_id: string; type: string };
   runs?: { id: string; source: string; ok: number; error?: string | null; started_at: number; finished_at?: number | null; tool_calls: { tool: string; stage?: string; args: Record<string, unknown> }[] }[];
   chat?: { id: string; role: string; text: string; ts: number }[];
@@ -129,7 +129,7 @@ export type Incident = {
 /* ---------- voice AI (Dograh · Gemini Live realtime · TeleCMI) ---------- */
 export type VoiceNumber = { id: number; config_id: number; config_name: string; provider: string; number: string; label: string | null; country: string | null; active: boolean; default_caller: boolean; telecmi: boolean };
 export type VoiceWorkflowRef = { id: number; uuid: string | null; name: string; synced_at: number; version: number };
-export type VoiceSettings = { org_id: string; telephony_configuration_id: number | null; from_phone_number_id: number | null; from_number: string | null; auto_dial: number; workflows: Record<string, VoiceWorkflowRef>; updated_at: number };
+export type VoiceSettings = { org_id: string; telephony_configuration_id: number | null; from_phone_number_id: number | null; from_number: string | null; auto_dial: number; auto_shutdown?: number; shutdown_after_seconds?: number; workflows: Record<string, VoiceWorkflowRef>; updated_at: number };
 export type VoiceStatus = {
   enabled: boolean; host: string | null; realtime_model: string; settings: VoiceSettings;
   telephony: { configs: { id: number; name: string; provider: string; connectivity: string; is_default_outbound: boolean; is_ready_for_outbound: boolean; phone_number_count: number; outbound_blocked_reason: string | null }[]; numbers: VoiceNumber[]; error: string | null };
@@ -196,3 +196,6 @@ export const fmtAgo = (ts?: number | null) => {
   return s < 60 ? `${s}s ago` : s < 3600 ? `${Math.floor(s / 60)}m ago` : `${Math.floor(s / 3600)}h ago`;
 };
 export const SEV_COLOR: Record<string, string> = { info: "blue", warning: "amber", critical: "red", emergency: "red", normal: "green", stale: "amber", offline: "muted" };
+
+/** m:ss until a unix timestamp (0:00 when passed). */
+export const fmtCountdown = (ts?: number | null, nowMs = Date.now()) => { const s = Math.max(0, Math.round((ts ?? 0) - nowMs / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`; };

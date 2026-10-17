@@ -14,7 +14,7 @@ type Snapshot = {
   presets: { key: string; label: string; types: string[]; description: string }[]; machines: UiMachine[]; log: { ts: number; text: string; tone: string }[];
 };
 const TYPES = [["conveyor", "Conveyor"], ["motor", "Motor / drive"], ["pump", "Pump"], ["compressor", "Compressor"], ["hopper", "Hopper / feeder"], ["sealer", "Sealer / packer"], ["inspection", "Inspection station"], ["other", "Generic machine"]];
-const TONE: Record<string, string> = { normal: "text-green", warning: "text-amber", critical: "text-red", stopped: "text-muted" };
+const TONE: Record<string, string> = { normal: "text-green", warning: "text-amber", critical: "text-red", stopped: "text-muted", shutdown: "text-violet" };
 const fmt = (ts: number) => new Date(ts * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
 
 async function post(path: string, body: unknown, method = "POST") {
@@ -45,7 +45,7 @@ export default function Home() {
   async function remove(id: string) { if (!confirm("Remove this machine from BatchGuard too?")) return; setBusy("remove"); try { await post(`/api/machines/${id}`, null, "DELETE"); setSel(null); await refresh(); } catch (e) { alert(e instanceof Error ? e.message : String(e)); } finally { setBusy(null); } }
 
   if (!s) return <div className="grid min-h-screen place-items-center text-muted">Connecting to the virtual factory…</div>;
-  const counts = s.machines.reduce((a, x) => { a[statusOf(x)]++; return a; }, { normal: 0, warning: 0, critical: 0, stopped: 0 } as Record<string, number>);
+  const counts = s.machines.reduce((a, x) => { a[statusOf(x)]++; return a; }, { normal: 0, warning: 0, critical: 0, stopped: 0, shutdown: 0 } as Record<string, number>);
 
   return (
     <div className="flex h-screen flex-col">
@@ -58,7 +58,7 @@ export default function Home() {
         <div className="flex items-center gap-3 text-xs">
           <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 ${s.connected ? "border-green/40 text-green" : "border-red/40 text-red"}`}>{s.connected ? <Wifi size={12} /> : <WifiOff size={12} />} {s.connected ? "connected" : "disconnected"} <span className="mono text-[10px] text-muted">{s.backend.replace(/^https?:\/\//, "")}</span></span>
           <span className="inline-flex items-center gap-1.5 rounded-full border border-line px-2.5 py-1 text-muted"><Activity size={12} /> {s.posts_per_min} posts/min</span>
-          <span className="hidden items-center gap-2 sm:inline-flex"><span className="text-green">{counts.normal} ok</span><span className="text-amber">{counts.warning} warn</span><span className="text-red">{counts.critical} crit</span><span className="text-muted">{counts.stopped} off</span></span>
+          <span className="hidden items-center gap-2 sm:inline-flex"><span className="text-green">{counts.normal} ok</span><span className="text-amber">{counts.warning} warn</span><span className="text-red">{counts.critical} crit</span><span className="text-muted">{counts.stopped} off</span>{counts.shutdown ? <span className="text-violet">{counts.shutdown} shut down</span> : null}</span>
           <a href={`${s.dashboard}/app`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 rounded-full bg-blue px-3 py-1.5 font-semibold text-white hover:bg-blue/90">Open BatchGuard <ExternalLink size={12} /></a>
         </div>
       </header>
@@ -89,8 +89,15 @@ export default function Home() {
                 <span className={`rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-wider ${TONE[statusOf(m)]} border-current`}>{statusOf(m)}</span>
               </div>
 
+              {m.shutdown && (
+                <div className="mt-3 rounded-xl border border-violet/50 bg-violet/10 p-3 text-xs">
+                  <p className="font-semibold text-violet">⏻ Shut down by {m.shutdown.by} · {fmt(m.shutdown.at)}</p>
+                  <p className="mt-1 text-muted">{m.shutdown.reason}</p>
+                  <p className="mt-1 text-muted">Telemetry is paused. Restart here (operator) or from the machine page in BatchGuard after a check.</p>
+                </div>
+              )}
               <div className="mt-3 flex flex-wrap gap-2">
-                <button onClick={() => act(m.id, { action: "running", running: !m.running }, "run")} className={`inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-semibold ${m.running ? "bg-red/15 text-red" : "bg-green/15 text-green"}`}><Power size={12} /> {m.running ? "Stop machine (telemetry drops)" : "Start machine"}</button>
+                <button onClick={() => act(m.id, { action: "running", running: !m.running }, "run")} className={`inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-semibold ${m.running ? "bg-red/15 text-red" : "bg-green/15 text-green"}`}><Power size={12} /> {m.running ? "Stop machine (telemetry drops)" : m.shutdown ? "Restart machine (operator)" : "Start machine"}</button>
                 <button onClick={() => act(m.id, { action: "release" }, "release")} className="inline-flex items-center gap-1 rounded-full border border-line px-3 py-1.5 text-xs hover:border-green/60"><RotateCcw size={12} /> Back to normal</button>
                 <button onClick={() => remove(m.id)} className="inline-flex items-center gap-1 rounded-full border border-line px-3 py-1.5 text-xs text-muted hover:border-red/60 hover:text-red"><Trash2 size={12} /></button>
               </div>

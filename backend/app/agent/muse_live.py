@@ -65,7 +65,8 @@ def snapshot(org_id: str) -> dict[str, Any]:
         mname = (row(conn().execute("SELECT name FROM machines WHERE id=?", (i["machine_id"],)).fetchone()) or {}).get("name")
         incidents.append({"id": i["id"], "machine": mname, "machine_id": i["machine_id"], "severity": i["severity"], "status": i["status"], "title": i["title"],
                           "open_minutes": int((t - i["opened_at"]) / 60), "summary": rep.get("summary"), "likely_cause": causes[0].get("name") if causes else None,
-                          "first_check": checks[0].get("action") if checks else None, "acknowledged_by": i.get("acknowledged_by")})
+                          "first_check": checks[0].get("action") if checks else None, "acknowledged_by": i.get("acknowledged_by"),
+                          "auto_shutdown": {"state": i.get("shutdown_state"), "seconds_left": int(i["shutdown_at"] - t) if i.get("shutdown_at") and i.get("shutdown_state") in ("pending", "warned") else None}})
     resolved_24h = conn().execute("SELECT COUNT(*) n FROM incidents WHERE org_id=? AND status='resolved' AND resolved_at>=?", (org_id, t - 86400)).fetchone()["n"]
     wo = row(conn().execute("SELECT SUM(status='open') open, SUM(status='in_progress') in_progress, SUM(status='done' AND done_at>=?) done_24h FROM work_orders WHERE org_id=?", (t - 86400, org_id)).fetchone()) or {}
     ids = [m["id"] for m in machines]
@@ -202,6 +203,9 @@ def system_instruction(org_id: str, user_name: str, page: str | None, voice: boo
         "work orders (create, assign, move to in progress/done), acknowledge or resolve incidents, voice settings. When the user asks to change something, do it with the tool right away, "
         "then confirm in one sentence what changed (the page updates live and the edited item is spotlighted). Read back phone numbers and limits exactly. "
         "Only deleting a contact needs a spoken confirmation first. If a name is ambiguous, ask which one.\n"
+        "SHUTDOWN: critical incidents run a countdown (default 5 minutes). If nobody acknowledges and no call is answered, Muse shuts the machine down automatically and says so. "
+        "Mention the countdown when you report a critical incident ('three minutes left before I shut it down unless someone acknowledges'). You can cancel a countdown (cancel_shutdown), "
+        "shut a machine down yourself when the user asks (shutdown_machine), and restart one after a check (restart_machine).\n"
         "CALLING: you can place real phone calls with place_call (to a contact or a number, optionally about an incident). Confirm who and which number before dialling, then say the call is on its way and that the transcript will appear on the Voice AI page.\n"
         f"FACTORY SNAPSHOT (refresh with get_factory_status when asked for current numbers):\n{json.dumps(snap, default=str)[:9000]}\n"
         + (f"MOST URGENT: {urgent['severity']} on {urgent['machine']} — {urgent['title']} (incident id {urgent['id']}).\n" if urgent else "No open incidents right now.\n")
@@ -345,7 +349,13 @@ async def live_session(org_id: str, user_name: str, page: str | None, incoming: 
                             continue
                         seen[d.get("id")] = key
                         mname = (row(conn().execute("SELECT name FROM machines WHERE id=?", (d.get("machine_id"),)).fetchone()) or {}).get("name", "a machine")
-                        if d.get("status") == "resolved":
+                        if d.get("shutdown_state") == "done" and seen.get(d.get("id") + ":sd") != "done":
+                            seen[d.get("id") + ":sd"] = "done"
+                            note = f"Muse has shut down {mname}: nobody acknowledged the incident or answered the call within the window. Say so clearly and offer to take them to the machine to restart it after a check."
+                        elif d.get("shutdown_state") == "warned" and seen.get(d.get("id") + ":sd") != "warned":
+                            seen[d.get("id") + ":sd"] = "warned"
+                            note = f"One minute left before Muse shuts down {mname} — nobody has acknowledged or answered the call. Warn the user and tell them acknowledging will stop the countdown."
+                        elif d.get("status") == "resolved":
                             note = f"{mname} is back to normal — the incident '{d.get('title')}' just resolved ({d.get('resolved_reason') or 'resolved'})."
                         elif d.get("report"):
                             rep = d["report"] if isinstance(d["report"], dict) else {}

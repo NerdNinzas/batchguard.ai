@@ -1,8 +1,9 @@
 import type { SimMachine as Full } from "@/server/engine";
 export type SimMachine = Omit<Full, "key" | "counters">;
 
-export type Status = "normal" | "warning" | "critical" | "stopped";
-export function statusOf(m: Pick<SimMachine, "params" | "values" | "running">): Status {
+export type Status = "normal" | "warning" | "critical" | "stopped" | "shutdown";
+export function statusOf(m: Pick<SimMachine, "params" | "values" | "running" | "shutdown">): Status {
+  if (m.shutdown) return "shutdown";
   if (!m.running) return "stopped";
   let s: Status = "normal";
   for (const p of m.params) {

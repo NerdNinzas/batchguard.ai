@@ -201,6 +201,18 @@ def incident_resolved(inc: dict[str, Any], m: dict[str, Any], feedback: dict[str
     return subject, layout("Resolved", "incident closed", body, "#16c784")
 
 
+def shutdown(inc: dict[str, Any], m: dict[str, Any], reason: str, contact: dict[str, Any] | None = None) -> tuple[str, str]:
+    subject = f"[BatchGuard] EMERGENCY SHUTDOWN — {m.get('name')} ({m.get('device_id')})"
+    body = (
+        _p(f"Hi {_e((contact or {}).get('name') or 'there')}, I had to stop <strong>{_e(m.get('name'))}</strong>.")
+        + _p(_e(reason))
+        + _kv([("Machine", f"{m.get('name')} · {m.get('device_id')}"), ("Incident", inc.get("title")), ("Severity", inc.get("severity"))])
+        + _button("Open the incident", _inc_link(inc), "#b91c1c")
+        + _p("Restart the machine from its page once a qualified person has checked it. The investigation report lists the likely cause and the first checks.", muted=True)
+    )
+    return subject, layout("Emergency shutdown", "no acknowledgement · no answer", body, "#b91c1c")
+
+
 def daily_digest(org: dict[str, Any], machines: list[dict[str, Any]], incidents: list[dict[str, Any]]) -> tuple[str, str]:
     subject = f"[BatchGuard] Daily digest · {org.get('name')} · {len(incidents)} incident(s)"
     worst = {m["status"] for m in machines}

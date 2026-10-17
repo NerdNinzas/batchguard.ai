@@ -43,8 +43,8 @@ def ingest_readings(m: dict[str, Any], readings: list[dict[str, Any]]) -> dict[s
                       (m["id"], r["parameter"], r["value"], unit, ts, state))
             latest_payload[r["parameter"]] = {"value": r["value"], "unit": unit, "ts": ts, "state": state}
             accepted += 1
-        was_offline = m["status"] in ("offline", "stale")
-        c.execute("UPDATE machines SET last_seen=?, status=CASE WHEN status IN ('offline','stale') THEN 'normal' ELSE status END WHERE id=?", (t, m["id"]))
+        was_offline = m["status"] in ("offline", "stale", "shutdown")
+        c.execute("UPDATE machines SET last_seen=?, status=CASE WHEN status IN ('offline','stale','shutdown') THEN 'normal' ELSE status END WHERE id=?", (t, m["id"]))
     signals: list[Signal] = []
     for r in readings:
         if r["parameter"] in latest_payload:

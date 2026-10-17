@@ -8,7 +8,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from . import bus, cloud, demo, incidents
+from . import bus, cloud, demo, incidents, shutdown
 from .config import settings
 from .db import conn, init_db, tx
 from .routers import auth, device, incidents as incidents_router, machines, misc, muse, orgs, voice, work_orders
@@ -22,6 +22,7 @@ async def _sweeper() -> None:
             await asyncio.to_thread(incidents.staleness_sweep)
             await asyncio.to_thread(incidents.escalation_sweep)
             await asyncio.to_thread(incidents.recovery_sweep)
+            await asyncio.to_thread(shutdown.sweep)
             if tick % 3 == 0:  # every 15 s: pull outcomes of voice calls still in flight
                 await asyncio.to_thread(voice_calls.poll_pending)
         except Exception as e:  # noqa: BLE001

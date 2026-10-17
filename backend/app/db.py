@@ -110,6 +110,11 @@ CREATE TABLE IF NOT EXISTS work_orders (
   position INTEGER NOT NULL DEFAULT 0, created_by TEXT, created_at REAL NOT NULL, updated_at REAL NOT NULL, done_at REAL
 );
 CREATE INDEX IF NOT EXISTS idx_work_orders_machine ON work_orders(machine_id, status);
+CREATE TABLE IF NOT EXISTS device_commands (
+  id TEXT PRIMARY KEY, machine_id TEXT NOT NULL, type TEXT NOT NULL, payload TEXT, reason TEXT, status TEXT NOT NULL DEFAULT 'pending',
+  incident_id TEXT, created_at REAL NOT NULL, acked_at REAL
+);
+CREATE INDEX IF NOT EXISTS idx_device_commands ON device_commands(machine_id, status);
 CREATE TABLE IF NOT EXISTS _changes (
   seq INTEGER PRIMARY KEY AUTOINCREMENT, tbl TEXT NOT NULL, key TEXT NOT NULL, op TEXT NOT NULL
 );
@@ -160,6 +165,13 @@ def init_db() -> None:
         c.execute("ALTER TABLE incidents ADD COLUMN last_abnormal_at REAL")
     if "resolved_reason" not in icols:
         c.execute("ALTER TABLE incidents ADD COLUMN resolved_reason TEXT")
+    for col, ddl in (("shutdown_at", "REAL"), ("shutdown_state", "TEXT")):
+        if col not in icols:
+            c.execute(f"ALTER TABLE incidents ADD COLUMN {col} {ddl}")
+    vcols = {r["name"] for r in c.execute("PRAGMA table_info(voice_settings)").fetchall()}
+    if "auto_shutdown" not in vcols:
+        c.execute("ALTER TABLE voice_settings ADD COLUMN auto_shutdown INTEGER NOT NULL DEFAULT 1")
+        c.execute("ALTER TABLE voice_settings ADD COLUMN shutdown_after_seconds INTEGER NOT NULL DEFAULT 300")
     for r in c.execute("SELECT name FROM sqlite_master WHERE type='trigger' AND name LIKE 'trg_%'").fetchall():
         tbl = r["name"][4:-2]
         if tbl not in SYNCED:

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { PhotoEvidence } from "@/components/app/PhotoEvidence";
+import { ShutdownBanner } from "@/components/app/ShutdownCountdown";
 import { useApp } from "@/components/app/Shell";
 import { Spot, useHighlight } from "@/components/muse/MuseLive";
 import { WorkOrdersBoard } from "@/components/app/WorkOrders";
@@ -86,6 +87,8 @@ export default function IncidentPage() {
           </div>
         </div>
       </div>
+
+      {inc.shutdown_state && inc.shutdown_state !== "cancelled" && <ShutdownBanner inc={inc} onChanged={load} />}
 
       <div className="grid gap-5 lg:grid-cols-[1.3fr_1fr]">
         <div className="space-y-5">

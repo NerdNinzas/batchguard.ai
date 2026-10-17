@@ -80,20 +80,21 @@ def get_settings(org_id: str) -> dict[str, Any]:
     if not r:
         r = {"org_id": org_id, "telephony_configuration_id": settings.dograh_telephony_config_id,
              "from_phone_number_id": settings.dograh_from_phone_number_id, "from_number": None,
-             "auto_dial": 1 if settings.voice_auto_dial else 0, "workflows": "{}", "updated_at": 0}
+             "auto_dial": 1 if settings.voice_auto_dial else 0, "workflows": "{}", "updated_at": 0, "auto_shutdown": 1, "shutdown_after_seconds": 300}
     r["workflows"] = uj(r["workflows"], {})
     return r
 
 
 def save_settings(org_id: str, patch: dict[str, Any]) -> dict[str, Any]:
     cur = get_settings(org_id)
-    cur.update({k: v for k, v in patch.items() if k in ("telephony_configuration_id", "from_phone_number_id", "from_number", "auto_dial", "workflows")})
+    cur.update({k: v for k, v in patch.items() if k in ("telephony_configuration_id", "from_phone_number_id", "from_number", "auto_dial", "workflows", "auto_shutdown", "shutdown_after_seconds")})
     with tx() as c:
         c.execute(
-            "INSERT INTO voice_settings (org_id, telephony_configuration_id, from_phone_number_id, from_number, auto_dial, workflows, updated_at) VALUES (?,?,?,?,?,?,?) "
+            "INSERT INTO voice_settings (org_id, telephony_configuration_id, from_phone_number_id, from_number, auto_dial, workflows, updated_at, auto_shutdown, shutdown_after_seconds) VALUES (?,?,?,?,?,?,?,?,?) "
             "ON CONFLICT(org_id) DO UPDATE SET telephony_configuration_id=excluded.telephony_configuration_id, from_phone_number_id=excluded.from_phone_number_id, "
-            "from_number=excluded.from_number, auto_dial=excluded.auto_dial, workflows=excluded.workflows, updated_at=excluded.updated_at",
-            (org_id, cur["telephony_configuration_id"], cur["from_phone_number_id"], cur["from_number"], int(bool(cur["auto_dial"])), j(cur["workflows"]), now()),
+            "from_number=excluded.from_number, auto_dial=excluded.auto_dial, workflows=excluded.workflows, updated_at=excluded.updated_at, auto_shutdown=excluded.auto_shutdown, shutdown_after_seconds=excluded.shutdown_after_seconds",
+            (org_id, cur["telephony_configuration_id"], cur["from_phone_number_id"], cur["from_number"], int(bool(cur["auto_dial"])), j(cur["workflows"]), now(),
+             int(bool(cur.get("auto_shutdown", 1))), int(cur.get("shutdown_after_seconds") or 300)),
         )
     return get_settings(org_id)
 

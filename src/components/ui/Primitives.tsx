@@ -72,7 +72,7 @@ export function Badge({ tone = "muted", children, className = "" }: { tone?: str
   return <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider ${TONES[tone] ?? TONES.muted} ${className}`}>{children}</span>;
 }
 
-export const statusTone = (s: string) => ({ normal: "green", warning: "amber", critical: "red", emergency: "red", stale: "amber", offline: "muted", open: "red", acknowledged: "amber", resolved: "green", info: "blue" })[s] ?? "muted";
+export const statusTone = (s: string) => ({ normal: "green", warning: "amber", critical: "red", emergency: "red", stale: "amber", offline: "muted", shutdown: "violet", open: "red", acknowledged: "amber", resolved: "green", info: "blue" })[s] ?? "muted";
 
 export function StatusDot({ status, className = "" }: { status: string; className?: string }) {
   const c = { green: "bg-green", amber: "bg-amber", red: "bg-red", blue: "bg-blue", muted: "bg-muted/50" }[statusTone(status)] ?? "bg-muted/50";

@@ -108,6 +108,9 @@ Tables: `users`, `orgs`, `contacts` (escalation ladder with quiet hours), `lines
 3. A call fills the template variables from the incident report (machine, problem, likely cause, first check) and triggers `POST /public/agent/workflow/{uuid}`.
 4. The backend polls the run every 15 s; when it completes it reads the transcript, takes Dograh's extraction, and if that is missing runs its own Gemini extraction over the transcript (heuristic fallback). `acknowledged = true` acknowledges the incident; a follow-up `verdict` resolves it with feedback. A **call summary email** goes to the primary contact.
 
+### 4.6b Auto-shutdown
+When an incident turns critical and the org has auto-shutdown on, a countdown starts (default 5 min). The sweep sends a last warning at 60 s, then, if nobody acknowledged and no call captured an acknowledgement, writes a `shutdown` command to `device_commands`, marks the machine `shutdown`, notifies every channel and tells Muse. Devices poll `/v1/commands` with their key and acknowledge commands; the simulator stops the machine and shows why. Acknowledging or resolving cancels the countdown; `POST /api/machines/{id}/restart` (or Muse's `restart_machine`) sends `start`.
+
 ### 4.7 Acting: photos, work orders, feedback
 - **Photo evidence** — a technician uploads a photo on the incident; Gemini vision describes it against the ranked causes and the findings become evidence lines on the report; "Re-investigate with the photos" feeds them back into the pipeline.
 - **Work orders** — Kanban per machine (open / in progress / done, drag and drop, assignee, due time). "From Muse's checks" creates one per recommended check with priority by severity.
