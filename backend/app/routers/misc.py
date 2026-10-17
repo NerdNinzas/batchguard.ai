@@ -185,11 +185,21 @@ def latest(org: dict[str, Any] = Depends(current_org)) -> list[dict[str, Any]]:
 
 
 @router.get("/telemetry/recent")
-def recent(limit: int = 200, org: dict[str, Any] = Depends(current_org)) -> list[dict[str, Any]]:
-    return rows(conn().execute(
-        "SELECT r.id, r.machine_id, m.name machine_name, r.parameter, r.value, r.unit, r.ts, r.received_at FROM readings r JOIN machines m ON m.id=r.machine_id WHERE m.org_id=? ORDER BY r.id DESC LIMIT ?",
-        (org["id"], limit),
+def recent(limit: int = 200, offset: int | None = None, org: dict[str, Any] = Depends(current_org)) -> Any:
+    """Newest readings first. With `offset` the response is `{rows, total, limit, offset}` for pagination."""
+    limit = max(1, min(500, limit))
+    mids = [r["id"] for r in conn().execute("SELECT id FROM machines WHERE org_id=?", (org["id"],)).fetchall()]
+    if not mids:
+        return {"rows": [], "total": 0, "limit": limit, "offset": offset or 0} if offset is not None else []
+    ph = ",".join("?" * len(mids))
+    out = rows(conn().execute(
+        f"SELECT r.id, r.machine_id, m.name machine_name, r.parameter, r.value, r.unit, r.ts, r.received_at FROM readings r JOIN machines m ON m.id=r.machine_id WHERE r.machine_id IN ({ph}) ORDER BY r.id DESC LIMIT ? OFFSET ?",
+        (*mids, limit, offset or 0),
     ).fetchall())
+    if offset is None:
+        return out
+    total = conn().execute(f"SELECT COUNT(*) n FROM readings WHERE machine_id IN ({ph})", mids).fetchone()["n"]
+    return {"rows": out, "total": total, "limit": limit, "offset": offset}
 
 
 # ---------- evaluation (blind runs) ----------

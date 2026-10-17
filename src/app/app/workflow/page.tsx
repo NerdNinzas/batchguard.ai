@@ -5,6 +5,7 @@ import { Background, Controls, Handle, MiniMap, Position, ReactFlow, addEdge, us
 import { Activity, Bot, ClipboardList, Cpu, PhoneCall, Plus, Radio, Save, Siren, Sparkles, Trash2, TrendingDown, TrendingUp, Wand2, Zap } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { LazySection } from "@/components/app/LazySection";
 import { useApp } from "@/components/app/Shell";
 import { VoiceBars } from "@/components/muse/MuseConsole";
 import { Badge, Button, Card, Empty, StatusDot, statusTone } from "@/components/ui/Primitives";
@@ -260,7 +261,7 @@ export default function WorkflowPage() {
         </Card>
 
         <div className="space-y-4">
-          <Card title={<span className="flex items-center gap-2"><Activity size={16} className="text-blue" /> Muse live log</span>} action={<span className="font-mono text-[10px] text-muted">{counts.rpm} rd/min</span>}>
+          <LazySection height={320}><Card title={<span className="flex items-center gap-2"><Activity size={16} className="text-blue" /> Muse live log</span>} action={<span className="font-mono text-[10px] text-muted">{counts.rpm} rd/min</span>}>
             <div className="max-h-[420px] space-y-1.5 overflow-y-auto pr-1">
               {log.length === 0 && <p className="text-xs text-muted">Waiting for the first reading…</p>}
               {log.map((l) => (
@@ -271,7 +272,7 @@ export default function WorkflowPage() {
                 </div>
               ))}
             </div>
-          </Card>
+          </Card></LazySection>
           <Card title="Machines" className="h-fit">
             <p className="mb-3 text-xs text-muted">Not on the canvas yet:</p>
             {offCanvas.length === 0 && <p className="text-xs text-muted">All machines are placed.</p>}

@@ -6,6 +6,7 @@ import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { PhotoEvidence } from "@/components/app/PhotoEvidence";
 import { ShutdownBanner } from "@/components/app/ShutdownCountdown";
+import { LazySection } from "@/components/app/LazySection";
 import { useApp } from "@/components/app/Shell";
 import { Spot, useHighlight } from "@/components/muse/MuseLive";
 import { WorkOrdersBoard } from "@/components/app/WorkOrders";
@@ -112,22 +113,22 @@ export default function IncidentPage() {
             )}
           </Card></Spot>
 
-          <Spot k="evidence"><Card title={<span className="flex items-center gap-2"><Camera size={18} className="text-blue" /> Photo evidence</span>} action={<span className="text-xs text-muted">{(inc.evidence ?? []).length} photo{(inc.evidence ?? []).length === 1 ? "" : "s"} · Gemini vision</span>}>
+          <LazySection height={220}><Spot k="evidence"><Card title={<span className="flex items-center gap-2"><Camera size={18} className="text-blue" /> Photo evidence</span>} action={<span className="text-xs text-muted">{(inc.evidence ?? []).length} photo{(inc.evidence ?? []).length === 1 ? "" : "s"} · Gemini vision</span>}>
             <PhotoEvidence incidentId={id} items={inc.evidence ?? []} onChanged={load} />
             {(inc.evidence ?? []).length > 0 && <div className="mt-3 flex items-center gap-2"><Button size="sm" variant="secondary" onClick={reinvestigate}><Wand2 size={14} /> Re-investigate with the photos</Button><span className="text-[11px] text-muted">Muse re-runs the pipeline with the photo findings as extra signals.</span></div>}
-          </Card></Spot>
+          </Card></Spot></LazySection>
 
-          <Spot k="work-orders"><Card title={<span className="flex items-center gap-2"><ClipboardList size={18} className="text-blue" /> Work orders</span>} action={r && r.checks.length > 0 ? <Button size="sm" variant="secondary" onClick={workOrdersFromChecks} loading={makingWo}><Wand2 size={14} /> From Muse&apos;s checks</Button> : undefined}>
+          <LazySection height={260}><Spot k="work-orders"><Card title={<span className="flex items-center gap-2"><ClipboardList size={18} className="text-blue" /> Work orders</span>} action={r && r.checks.length > 0 ? <Button size="sm" variant="secondary" onClick={workOrdersFromChecks} loading={makingWo}><Wand2 size={14} /> From Muse&apos;s checks</Button> : undefined}>
             <WorkOrdersBoard machineId={inc.machine_id} incidentId={id} contacts={contacts} compact />
-          </Card></Spot>
+          </Card></Spot></LazySection>
 
-          <Spot k="chat"><Card title={<span className="flex items-center gap-2"><MessageSquare size={18} className="text-blue" /> Ask Muse about this incident</span>}>
+          <LazySection height={260}><Spot k="chat"><Card title={<span className="flex items-center gap-2"><MessageSquare size={18} className="text-blue" /> Ask Muse about this incident</span>}>
             <div className="max-h-72 space-y-2 overflow-y-auto">
               {(inc.chat ?? []).length === 0 && <p className="text-sm text-muted">e.g. “Why not a fan failure?” · “What should I check first?”</p>}
               {inc.chat?.map((m) => <div key={m.id} className={`max-w-[85%] rounded-2xl px-3.5 py-2 text-sm ${m.role === "user" ? "ml-auto bg-blue text-white" : "bg-sky-soft text-ink"}`}>{m.text}</div>)}
             </div>
             <div className="mt-3 flex gap-2"><Input value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => e.key === "Enter" && ask()} placeholder="Why not a motor fault?" className="flex-1" /><Button onClick={ask} loading={asking}><Send size={16} /></Button></div>
-          </Card></Spot>
+          </Card></Spot></LazySection>
         </div>
 
         <div className="space-y-5">
@@ -137,9 +138,9 @@ export default function IncidentPage() {
           <Spot k="escalation"><Card title="Escalation">
             <ul className="space-y-1.5">{(inc.notifications ?? []).map((n) => <li key={n.id} className="flex items-center gap-2 text-xs"><span className="font-mono text-muted">{fmtTime(n.sent_at)}</span><Badge tone={n.channel === "voice" ? "violet" : n.channel === "email" ? "blue" : "green"}>{n.channel}</Badge><span className="text-ink">{n.status}</span>{n.to_addr && <span className="text-muted">→ {n.to_addr}</span>}</li>)}{(inc.notifications ?? []).length === 0 && <p className="text-sm text-muted">None.</p>}</ul>
           </Card></Spot>
-          <Spot k="agent-runs"><Card title="Agent runs">
+          <LazySection height={200}><Spot k="agent-runs"><Card title="Agent runs">
             {(inc.runs ?? []).map((run) => <div key={run.id} className="mb-2 rounded-xl border border-line bg-white p-3 text-xs"><div className="flex items-center justify-between"><Badge tone={run.ok ? "green" : "red"}>{run.source}</Badge><span className="font-mono text-muted">{run.finished_at ? `${(run.finished_at - run.started_at).toFixed(1)}s` : "running"}</span></div>{run.tool_calls.length > 0 && <p className="mt-1 font-mono text-[10px] text-muted">{run.tool_calls.map((t) => (t.stage ? `${t.stage}·${t.tool}` : t.tool)).join(" → ")}</p>}{run.error && <p className="mt-1 text-red">{run.error.slice(0, 200)}</p>}</div>)}
-          </Card></Spot>
+          </Card></Spot></LazySection>
           {inc.status === "resolved" && inc.resolved_reason === "back to normal" && <Card title="Back to normal"><p className="text-sm text-ink"><ThumbsUp size={14} className="inline text-green" /> The machine&apos;s parameters returned to their normal band{inc.resolved_at ? ` at ${fmtTime(inc.resolved_at)}` : ""}, so Muse closed this incident automatically. The investigation report and timeline above stay as the record.</p></Card>}
           {inc.feedback && inc.feedback.verdict !== "auto" && <Card title="Engineer feedback"><p className="text-sm text-ink">{inc.feedback.verdict === "correct" ? <ThumbsUp size={14} className="inline text-green" /> : <ThumbsDown size={14} className="inline text-red" />} {inc.feedback.verdict}{inc.feedback.actual_cause ? ` · actual cause: ${inc.feedback.actual_cause}` : ""}{inc.feedback.fix ? ` · fix: ${inc.feedback.fix}` : ""}</p></Card>}
         </div>

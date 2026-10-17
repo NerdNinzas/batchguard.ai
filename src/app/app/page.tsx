@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import { Activity, ArrowRight, Bot, CheckCircle2, Clock, Cpu, PhoneCall, Power, ShieldAlert, ShieldCheck, Siren, Users, Zap } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { LazySection } from "@/components/app/LazySection";
 import { useApp } from "@/components/app/Shell";
 import { MuseConsole } from "@/components/muse/MuseConsole";
 import { useMuse } from "@/components/muse/MuseLive";
@@ -130,7 +131,7 @@ export default function OverviewPage() {
       <MuseConsole />
 
       {/* machines */}
-      <section data-hl="machines" className={`rounded-3xl${hl("machines")}`}>
+      <LazySection height={520}><section data-hl="machines" className={`rounded-3xl${hl("machines")}`}>
         <div className="mb-3 flex items-end justify-between">
           <div><p className="font-mono text-[10px] uppercase tracking-[0.25em] text-blue">Line health</p><h2 className="font-display text-2xl font-semibold text-ink">Your machines, live</h2></div>
           <Link href="/app/machines" className="text-sm font-semibold text-blue hover:underline">All machines →</Link>
@@ -179,9 +180,9 @@ export default function OverviewPage() {
           </div>
         )}
       </section>
-
+</LazySection>
       {/* pulse + incidents + agent */}
-      <div className="grid gap-5 xl:grid-cols-3">
+      <LazySection height={420}><div className="grid gap-5 xl:grid-cols-3">
         <section data-hl="incidents" className={`card rounded-2xl p-5 xl:col-span-2${hl("incidents")}`}>
           <div className="mb-3 flex items-center justify-between">
             <div><p className="font-mono text-[10px] uppercase tracking-[0.25em] text-blue">Line pulse</p><h3 className="font-display text-xl font-semibold text-ink">Readings ingested · last 30 min</h3></div>
@@ -217,10 +218,10 @@ export default function OverviewPage() {
             ))}
           </ol>
         </section>
-      </div>
+      </div></LazySection>
 
       {/* agent strip */}
-      <section data-hl="pulse" className={`card flex flex-wrap items-center gap-4 rounded-2xl p-4${hl("pulse")}`}>
+      <LazySection height={120}><section data-hl="pulse" className={`card flex flex-wrap items-center gap-4 rounded-2xl p-4${hl("pulse")}`}>
         <img src="/muse.webp" alt="" className="h-16 w-auto" />
         <div className="min-w-0 flex-1">
           <p className="font-display text-lg font-semibold text-ink">Muse · {d.gemini_enabled ? "ADK pipeline on Gemini" : "rule-based investigator"}</p>
@@ -228,7 +229,7 @@ export default function OverviewPage() {
         </div>
         <div className="flex flex-wrap gap-1.5">{d.agent_runs.slice(0, 5).map((r, i) => <Badge key={i} tone={r.ok ? (r.source.includes("gemini") ? "violet" : "blue") : "red"}>{r.source}</Badge>)}</div>
         <div className="flex items-center gap-1.5 text-xs text-muted"><StatusDot status="normal" /> live</div>
-      </section>
+      </section></LazySection>
     </div>
   );
 }

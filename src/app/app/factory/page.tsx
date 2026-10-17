@@ -6,17 +6,19 @@ import { useEffect, useState } from "react";
 import { useApp } from "@/components/app/Shell";
 import { Badge, Button, Empty, StatusDot, statusTone } from "@/components/ui/Primitives";
 import { PageSkeleton, Skeleton } from "@/components/ui/Primitives";
-import { get, type Latest, type Machine } from "@/lib/api";
+import { cached, get, type Latest, type Machine } from "@/lib/api";
 
 const LiveFactory = dynamic(() => import("@/components/three/LiveFactory"), { ssr: false, loading: () => <div className="relative h-full w-full"><Skeleton className="h-full rounded-none" /><div className="absolute inset-x-0 bottom-10 flex justify-center gap-8">{[0, 1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-28 w-28 rounded-2xl" />)}</div><p className="absolute inset-x-0 top-1/2 text-center text-sm text-muted">Loading the 3D factory…</p></div> });
 
 export default function FactoryPage() {
   const { subscribe } = useApp();
-  const [machines, setMachines] = useState<Machine[] | null>(null);
+  const [machines, setMachines] = useState<Machine[] | null>(() => cached<Machine[]>("/api/machines"));
   const [latest, setLatest] = useState<Record<string, Latest>>({});
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    get<Machine[]>("/api/machines").then((ms) => { setMachines(ms); setLatest(Object.fromEntries(ms.map((m) => [m.id, m.latest]))); }).catch(() => setMachines([]));
+    const load = () => get<Machine[]>("/api/machines").then((ms) => { setMachines(ms); setError(null); setLatest(Object.fromEntries(ms.map((m) => [m.id, m.latest]))); }).catch((e) => { setError(e instanceof Error ? e.message : "Could not load machines"); setTimeout(load, 4000); });
+    load();
   }, []);
   useEffect(
     () =>
@@ -27,7 +29,7 @@ export default function FactoryPage() {
     [subscribe],
   );
 
-  if (!machines) return <PageSkeleton variant="canvas" />;
+  if (!machines) return <div className="space-y-2">{error && <p className="rounded-xl border border-amber/40 bg-amber/10 px-3 py-2 text-xs text-ink">Still connecting to the backend ({error}) — retrying…</p>}<PageSkeleton variant="canvas" /></div>;
   if (machines.length === 0) return <Empty title="No machines to show" body="Onboard a machine and it appears here as a 3D model, coloured by its live status." action={<Link href="/app/onboard"><Button>Onboard a machine</Button></Link>} />;
 
   return (

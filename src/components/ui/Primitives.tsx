@@ -2,7 +2,7 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import { Loader2, X } from "lucide-react";
-import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, SelectHTMLAttributes, TextareaHTMLAttributes } from "react";
+import type { CSSProperties, ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, SelectHTMLAttributes, TextareaHTMLAttributes } from "react";
 
 export function Button({ variant = "primary", size = "md", loading, className = "", children, ...rest }: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: "primary" | "secondary" | "ghost" | "danger"; size?: "sm" | "md" | "lg"; loading?: boolean }) {
   const v = {
@@ -135,8 +135,8 @@ export function Spinner({ label }: { label?: string }) {
 
 
 /* ---------- skeleton loading ---------- */
-export function Skeleton({ className = "" }: { className?: string }) {
-  return <div aria-hidden className={`skeleton ${className}`} />;
+export function Skeleton({ className = "", style }: { className?: string; style?: CSSProperties }) {
+  return <div aria-hidden className={`skeleton ${className}`} style={style} />;
 }
 
 function SkCard({ lines = 3, className = "" }: { lines?: number; className?: string }) {

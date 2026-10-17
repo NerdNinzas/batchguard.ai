@@ -7,6 +7,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { KeyReveal } from "@/components/app/KeyReveal";
 import { WorkOrdersBoard } from "@/components/app/WorkOrders";
+import { LazySection } from "@/components/app/LazySection";
 import { useApp } from "@/components/app/Shell";
 import { Spot, useHighlight, useMuse } from "@/components/muse/MuseLive";
 import { HealthRing, LimitChart } from "@/components/app/charts";
@@ -147,12 +148,12 @@ export default function MachinePage() {
         })}
       </div>
 
-      <Spot k="work-orders"><Card title={<span className="flex items-center gap-2"><ClipboardList size={18} className="text-blue" /> Maintenance work orders</span>} action={<span className="text-xs text-muted">from Muse&apos;s checks or added by hand</span>}>
+      <LazySection height={300}><Spot k="work-orders"><Card title={<span className="flex items-center gap-2"><ClipboardList size={18} className="text-blue" /> Maintenance work orders</span>} action={<span className="text-xs text-muted">from Muse&apos;s checks or added by hand</span>}>
         <WorkOrdersBoard machineId={id} contacts={contacts} />
-      </Card></Spot>
+      </Card></Spot></LazySection>
 
       <div className="grid gap-4 lg:grid-cols-[1fr_1fr]">
-        <Spot k="incidents"><Card title="Incidents">
+        <LazySection height={260}><Spot k="incidents"><Card title="Incidents">
           {incidents.length === 0 && <p className="text-sm text-muted">None yet.</p>}
           <div className="space-y-2">
             {incidents.slice(0, 8).map((i) => (
@@ -166,8 +167,8 @@ export default function MachinePage() {
               </Link>
             ))}
           </div>
-        </Card></Spot>
-        <Spot k="events"><Card title="Events & logs">
+        </Card></Spot></LazySection>
+        <LazySection height={260}><Spot k="events"><Card title="Events & logs">
           {events.length === 0 && <p className="text-sm text-muted">No events. Devices can post E-stop, jam sensor etc. to /v1/events.</p>}
           <ul className="space-y-1.5">
             {events.map((e) => (
@@ -178,11 +179,11 @@ export default function MachinePage() {
               </li>
             ))}
           </ul>
-        </Card></Spot>
+        </Card></Spot></LazySection>
       </div>
 
       {m.knowledge.length > 0 && (
-        <Spot k="knowledge"><Card title="Knowledge from the manual">
+        <LazySection height={200}><Spot k="knowledge"><Card title="Knowledge from the manual">
           <div className="grid gap-3 md:grid-cols-2">
             {m.knowledge.map((k, i) => (
               <div key={i} className="rounded-xl border border-line bg-white p-3">
@@ -191,12 +192,12 @@ export default function MachinePage() {
               </div>
             ))}
           </div>
-        </Card></Spot>
+        </Card></Spot></LazySection>
       )}
 
-      <Spot k="device"><Card title={<span className="flex items-center gap-2"><KeyRound size={18} className="text-blue" /> Device connection</span>}>
+      <LazySection height={300}><Spot k="device"><Card title={<span className="flex items-center gap-2"><KeyRound size={18} className="text-blue" /> Device connection</span>}>
         <KeyReveal machine={m} apiKey={rotated?.api_key} codes={rotated?.code} />
-      </Card></Spot>
+      </Card></Spot></LazySection>
 
       <Modal open={confirmDel} onClose={() => setConfirmDel(false)} title="Delete this machine?">
         <p className="text-sm text-muted">All readings, events and its device key are removed. Incidents are kept for history.</p>

@@ -9,6 +9,7 @@ import {
 import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { LazySection } from "@/components/app/LazySection";
 import { useApp } from "@/components/app/Shell";
 import { Badge, Button, Card, Empty, Input, Modal, Select, Spinner, Textarea } from "@/components/ui/Primitives";
 import { PageSkeleton } from "@/components/ui/Primitives";
@@ -478,7 +479,7 @@ export default function VoicePage() {
       </div>
 
       {/* call types */}
-      <div>
+      <LazySection height={420}><div>
         <div data-hl="call-types" className="mb-3 flex items-end justify-between">
           <div><h2 className="font-display text-2xl font-semibold text-ink">Call types</h2><p className="text-sm text-muted">Click one to read the workflow, every prompt, the extraction variables and the QC rubric — then place it.</p></div>
         </div>
@@ -503,10 +504,10 @@ export default function VoicePage() {
             </div>
           ))}
         </div>
-      </div>
+      </div></LazySection>
 
       {/* history */}
-      <Spot k="history"><Card title={<span className="flex items-center gap-2"><AudioLines size={18} className="text-blue" /> Call history</span>} action={<Button size="sm" variant="ghost" onClick={() => load()}><RefreshCw size={14} /> Refresh</Button>}>
+      <LazySection height={300}><Spot k="history"><Card title={<span className="flex items-center gap-2"><AudioLines size={18} className="text-blue" /> Call history</span>} action={<Button size="sm" variant="ghost" onClick={() => load()}><RefreshCw size={14} /> Refresh</Button>}>
         {calls.length === 0 ? <Empty title="No calls yet" body="Place a test call above, or open an incident and press “Call the on-call contact now”." /> : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -531,7 +532,7 @@ export default function VoicePage() {
             </table>
           </div>
         )}
-      </Card></Spot>
+      </Card></Spot></LazySection>
 
       {/* call-type detail */}
       <Modal open={!!sel} onClose={() => setOpen(null)} width="max-w-6xl" title={sel ? <span className="flex items-center gap-3"><span className={`grid h-10 w-10 place-items-center rounded-2xl bg-sky-soft ${TONE_BG[sel.tone]?.split(" ").pop() ?? "text-blue"}`}>{ICONS[sel.icon]}</span>{sel.title}</span> : null}>
