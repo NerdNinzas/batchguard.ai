@@ -4,7 +4,7 @@ Factory monitoring with an investigating AI agent. Onboard a machine from its PD
 
 Built for the **Google Cloud AI Builder Cup 2026 · Manufacturing** theme on Google ADK, Gemini 2.5, Gemini Live, Cloud Run, Firestore, Pub/Sub, BigQuery and Cloud Storage.
 
-- **Live demo:** https://batchguard-frontend-6our3ivvha-as.a.run.app — sign in with `demo@batchguard.ai` / `demo1234`
+- **Live demo:** https://batchguard.web.app — sign in with `demo@batchguard.ai` / `demo1234`
 - **The idea and the problem:** [IDEA.md](IDEA.md)
 - **How it is built, end to end:** [SOLUTION.md](SOLUTION.md)
 
@@ -92,7 +92,7 @@ Sign in with `demo@batchguard.ai` / `demo1234`. Demo mode seeds a packaging line
 
 ### Frontend environment (`.env.local`)
 
-`BACKEND_URL` (proxy target for `/api/*` and `/v1/*`), `NEXT_PUBLIC_BACKEND_URL` (origin the browser uses for the voice websocket), `NEXT_PUBLIC_FIREBASE_*` (Google sign-in button; optional).
+`BACKEND_URL` (proxy target for `/api/*` and `/v1/*`), `NEXT_PUBLIC_BACKEND_URL` (backend origin the browser uses for the live stream, chat and voice websocket), `NEXT_PUBLIC_FIREBASE_*` (Google sign-in button; optional).
 
 ---
 
