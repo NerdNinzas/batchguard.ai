@@ -111,7 +111,7 @@ export type VoiceCall = {
 export type Notification = { id: string; incident_id?: string | null; channel: string; contact_id?: string | null; to_addr?: string | null; subject: string; body: string; status: string; sent_at: number; read: number };
 
 /* ---------- live stream ---------- */
-export type LiveEvent = { type: "telemetry" | "incident" | "machine" | "event" | "notification" | "voice_call" | "work_order"; data: Record<string, unknown> & { [k: string]: unknown } };
+export type LiveEvent = { type: "telemetry" | "incident" | "machine" | "event" | "notification" | "voice_call" | "work_order" | "contact" | "org" | "parameter" | "voice_settings"; data: Record<string, unknown> & { [k: string]: unknown } };
 
 /** Subscribe to the org's SSE stream. `onEvent` is called for every message; returns connection state. */
 export function useLive(onEvent: (e: LiveEvent) => void, enabled = true) {

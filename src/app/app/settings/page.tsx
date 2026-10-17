@@ -52,7 +52,7 @@ function EmailCard({ email }: { email: EmailInfo | null }) {
 }
 
 export default function SettingsPage() {
-  const { user, refreshUser } = useApp();
+  const { user, refreshUser, subscribe } = useApp();
   const { toast } = useToast();
   const [org, setOrg] = useState({ name: user.org?.name ?? "", owner_name: user.org?.owner_name ?? "", owner_email: user.org?.owner_email ?? "", phone: user.org?.phone ?? "", industry: user.org?.industry ?? "", size: user.org?.size ?? "", timezone: user.org?.timezone ?? "Asia/Singapore" });
   const [health, setHealth] = useState<Health | null>(null);
@@ -60,6 +60,9 @@ export default function SettingsPage() {
   const [score, setScore] = useState<Score | null>(null);
   const [machines, setMachines] = useState<Machine[]>([]);
   const [run, setRun] = useState({ machine_id: "", injected_fault: "bearing_wear", note: "" });
+  useEffect(() => subscribe((e) => {
+    if (e.type === "org") { const o = e.data as Record<string, string>; setOrg((cur) => ({ ...cur, name: o.name ?? cur.name, owner_name: o.owner_name ?? cur.owner_name, owner_email: o.owner_email ?? cur.owner_email, phone: o.phone ?? cur.phone, industry: o.industry ?? cur.industry, timezone: o.timezone ?? cur.timezone })); refreshUser(); }
+  }), [subscribe, refreshUser]);
 
   const loadScore = () => get<Score>("/api/eval/scoreboard").then(setScore);
   useEffect(() => {

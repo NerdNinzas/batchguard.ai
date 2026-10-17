@@ -3,6 +3,7 @@ import { Spot } from "@/components/muse/MuseLive";
 
 import { Plus, Save, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { useApp } from "@/components/app/Shell";
 import { Button, Card, Input, Spinner } from "@/components/ui/Primitives";
 import { useToast } from "@/components/ui/Toast";
 import { del, get, post, put, type Contact } from "@/lib/api";
@@ -13,6 +14,8 @@ export default function ContactsPage() {
   const [draft, setDraft] = useState<Partial<Contact>>({ name: "", role: "", phone: "", email: "", escalation_order: 1, quiet_start: "", quiet_end: "" });
   const load = () => get<Contact[]>("/api/contacts").then((c) => { setItems(c); setDraft((d) => ({ ...d, escalation_order: c.length + 1 })); });
   useEffect(() => { load(); }, []);
+  const { subscribe } = useApp();
+  useEffect(() => subscribe((e) => { if (e.type === "contact") load(); }), [subscribe]);
   if (!items) return <Spinner />;
 
   async function add() {

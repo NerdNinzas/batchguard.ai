@@ -92,8 +92,11 @@ def most_urgent(snap: dict[str, Any]) -> dict[str, Any] | None:
 
 
 # ---------------------------------------------------------------- tools (shared by chat + live)
-def make_tools(org_id: str, emit: Callable[[dict[str, Any]], None]) -> tuple[list[types.Tool], dict[str, Callable[..., Any]]]:
-    """Returns Gemini tool declarations + python implementations. `emit` receives UI commands (navigate/highlight)."""
+def make_tools(org_id: str, emit: Callable[[dict[str, Any]], None], user: dict[str, Any] | None = None) -> tuple[list[types.Tool], dict[str, Callable[..., Any]]]:
+    """Returns Gemini tool declarations + python implementations. `emit` receives UI commands (navigate/highlight/edited)."""
+    from .muse_actions import make_action_tools
+
+    action_decls, action_impls = make_action_tools(org_id, user or {}, emit)
 
     def get_factory_status() -> dict[str, Any]:
         return snapshot(org_id)
@@ -143,8 +146,8 @@ def make_tools(org_id: str, emit: Callable[[dict[str, Any]], None]) -> tuple[lis
         emit(cmd)
         return {"ok": True, "path": path, "highlighted": highlight, "sections_on_this_page": SECTIONS.get(page, [])}
 
-    impls = {"get_factory_status": get_factory_status, "get_incident": get_incident, "get_machine": get_machine, "navigate": navigate}
-    decl = types.Tool(function_declarations=[
+    impls = {"get_factory_status": get_factory_status, "get_incident": get_incident, "get_machine": get_machine, "navigate": navigate, **action_impls}
+    decl = types.Tool(function_declarations=action_decls + [
         types.FunctionDeclaration(name="get_factory_status", description="Live snapshot of every machine (status, health, latest readings, time-to-limit forecasts), open incidents with likely cause and first check, work orders, production rate, recent voice calls.", parameters=types.Schema(type="OBJECT", properties={})),
         types.FunctionDeclaration(name="get_incident", description="Full detail of one incident by id: Muse's summary, ranked causes, recommended checks.", parameters=types.Schema(type="OBJECT", properties={"incident_id": types.Schema(type="STRING")}, required=["incident_id"])),
         types.FunctionDeclaration(name="get_machine", description="One machine by name or id: latest readings, forecasts, recent events.", parameters=types.Schema(type="OBJECT", properties={"name_or_id": types.Schema(type="STRING")}, required=["name_or_id"])),
@@ -190,6 +193,10 @@ def system_instruction(org_id: str, user_name: str, page: str | None, voice: boo
         "('Taking you to the compressor's pressure chart — it's highlighted in yellow, have a look'). If they ask 'where is X', navigate there rather than describing it. "
         "When there is an open critical or emergency incident, offer once to take them to it; if they say yes, navigate to page 'incident' with its id. "
         "After a navigate tool call returns, finish with at most one short sentence — do not repeat the quip.\n"
+        "EDITING: you can change things directly — escalation contacts (add/edit/remove, order, quiet hours), organisation details, machine names and locations, parameter limits, "
+        "work orders (create, assign, move to in progress/done), acknowledge or resolve incidents, voice settings. When the user asks to change something, do it with the tool right away, "
+        "then confirm in one sentence what changed (the page updates live and the edited item is spotlighted). Read back phone numbers and limits exactly. "
+        "Only deleting a contact needs a spoken confirmation first. If a name is ambiguous, ask which one.\n"
         f"FACTORY SNAPSHOT (refresh with get_factory_status when asked for current numbers):\n{json.dumps(snap, default=str)[:9000]}\n"
         + (f"MOST URGENT: {urgent['severity']} on {urgent['machine']} — {urgent['title']} (incident id {urgent['id']}).\n" if urgent else "No open incidents right now.\n")
     )
@@ -200,10 +207,10 @@ def _client() -> genai.Client:
 
 
 # ---------------------------------------------------------------- text chat (SSE, streaming, tool loop)
-def chat_stream(org_id: str, user_name: str, history: list[dict[str, str]], page: str | None) -> Iterator[dict[str, Any]]:
-    """Yields {"type":"delta","text"} | {"type":"navigate",...} | {"type":"tool","name"} | {"type":"done"} | {"type":"error"}."""
+def chat_stream(org_id: str, user_name: str, history: list[dict[str, str]], page: str | None, user: dict[str, Any] | None = None) -> Iterator[dict[str, Any]]:
+    """Yields {"type":"delta","text"} | {"type":"navigate"|"edited",...} | {"type":"tool","name"} | {"type":"done"} | {"type":"error"}."""
     commands: list[dict[str, Any]] = []
-    tools, impls = make_tools(org_id, commands.append)
+    tools, impls = make_tools(org_id, commands.append, user)
     if not settings.gemini_enabled:
         yield {"type": "delta", "text": _fallback_answer(org_id, history[-1]["text"] if history else "")}
         yield {"type": "done"}
@@ -284,13 +291,13 @@ def greeting(org_id: str, user_name: str) -> dict[str, Any]:
 LIVE_INPUT_MIME = "audio/pcm;rate=16000"
 
 
-async def live_session(org_id: str, user_name: str, page: str | None, incoming: AsyncIterator[dict[str, Any]], send: Callable[[dict[str, Any]], Any]) -> None:
+async def live_session(org_id: str, user_name: str, page: str | None, incoming: AsyncIterator[dict[str, Any]], send: Callable[[dict[str, Any]], Any], user: dict[str, Any] | None = None) -> None:
     """Relay between a browser websocket and Gemini Live.
     incoming: async iterator of browser messages {type: audio|text|page|end, ...}
     send: coroutine function to push messages to the browser."""
     loop = asyncio.get_running_loop()
     cmd_queue: asyncio.Queue = asyncio.Queue()
-    tools, impls = make_tools(org_id, lambda c: loop.call_soon_threadsafe(cmd_queue.put_nowait, c))
+    tools, impls = make_tools(org_id, lambda c: loop.call_soon_threadsafe(cmd_queue.put_nowait, c), user)
     client = genai.Client(vertexai=True, project=settings.google_cloud_project or settings.gcp_project, location=settings.gemini_live_location)
     cfg = types.LiveConnectConfig(
         response_modalities=["AUDIO"],

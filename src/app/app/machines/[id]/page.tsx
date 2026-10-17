@@ -53,6 +53,7 @@ export default function MachinePage() {
   useEffect(
     () =>
       subscribe((e) => {
+        if ((e.type === "parameter" && e.data.machine_id === id) || (e.type === "machine" && e.data.id === id && e.data.action === "updated")) { load(); return; }
         if (e.type === "telemetry" && e.data.machine_id === id) {
           const latest = e.data.latest as Machine["latest"];
           const ts = Number(e.data.ts);

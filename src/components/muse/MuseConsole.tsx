@@ -43,14 +43,14 @@ export function VoiceBars({ level, active, speaking, size = 1, color = "bg-white
 }
 
 /** The round voice button (as in the reference image): blue disc, white bars, dark rounded frame. */
-export function VoiceButton({ size = 112, frame = true }: { size?: number; frame?: boolean }) {
+export function VoiceButton({ size = 112, frame = true, rings = true }: { size?: number; frame?: boolean; rings?: boolean }) {
   const { voice, level, outLevel, startVoice, stopVoice } = useMuse();
   const on = voice !== "off";
   const speaking = voice === "speaking";
   const lvl = speaking ? outLevel : voice === "listening" ? level : 0;
   return (
     <button onClick={on ? stopVoice : startVoice} aria-label={on ? "End voice" : "Start voice"} className={`group relative grid place-items-center transition active:scale-95 ${frame ? "rounded-[28%] bg-[#0b1a33] shadow-[0_18px_40px_-18px_rgba(11,26,51,.9)]" : ""}`} style={frame ? { width: size * 1.45, height: size * 1.45 } : { width: size, height: size }}>
-      {on && <motion.span animate={{ scale: [1, 1.25 + lvl * 0.5, 1], opacity: [0.25, 0.05, 0.25] }} transition={{ repeat: Infinity, duration: speaking ? 0.7 : 1.6, ease: "easeInOut" }} className={`absolute rounded-full ${speaking ? "bg-blue" : "bg-green"}`} style={{ width: size, height: size }} />}
+      {on && rings && <motion.span animate={{ scale: [1, 1.25 + lvl * 0.5, 1], opacity: [0.25, 0.05, 0.25] }} transition={{ repeat: Infinity, duration: speaking ? 0.7 : 1.6, ease: "easeInOut" }} className={`absolute rounded-full ${speaking ? "bg-blue" : "bg-green"}`} style={{ width: size, height: size }} />}
       <motion.span animate={{ scale: on ? 1 + lvl * 0.12 : 1 }} transition={{ duration: 0.08 }} className={`relative grid place-items-center rounded-full ${voice === "error" ? "bg-red" : voice === "connecting" ? "bg-amber" : on ? (speaking ? "bg-blue" : "bg-[#2b7fff]") : "bg-blue"} shadow-[inset_0_-6px_14px_rgba(0,0,0,.25),0_8px_24px_-8px_rgba(30,111,255,.9)]`} style={{ width: size, height: size }}>
         {on ? <VoiceBars level={lvl} active speaking={speaking} size={size / 56} /> : <VoiceBars level={0} active={false} speaking={false} size={size / 56} />}
       </motion.span>
@@ -165,9 +165,9 @@ export function MuseVoiceFab() {
   const { voice } = useMuse();
   const on = voice !== "off";
   return (
-    <div className="fixed bottom-[92px] right-4 z-40 flex flex-col items-center gap-1">
-      <VoiceButton size={54} frame />
-      <span className={`rounded-full px-2 py-0.5 font-mono text-[9px] uppercase tracking-[0.2em] ${on ? "bg-blue text-white" : "bg-white/90 text-muted shadow"}`}>{voice === "speaking" ? "Muse" : voice === "listening" ? "live" : voice === "connecting" ? "…" : "talk"}</span>
+    <div className="fixed bottom-[92px] right-4 z-40">
+      <VoiceButton size={56} frame={false} rings={false} />
+      {on && <span className="absolute -left-1 -top-1 h-3 w-3 rounded-full border-2 border-white bg-green" />}
     </div>
   );
 }

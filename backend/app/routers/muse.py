@@ -31,7 +31,7 @@ async def chat(body: ChatIn, org: dict[str, Any] = Depends(current_org), user: d
 
     def worker() -> None:
         try:
-            for ev in muse_live.chat_stream(org["id"], user.get("name") or "", body.messages, body.page):
+            for ev in muse_live.chat_stream(org["id"], user.get("name") or "", body.messages, body.page, user):
                 loop.call_soon_threadsafe(q.put_nowait, ev)
         except Exception as e:  # noqa: BLE001
             loop.call_soon_threadsafe(q.put_nowait, {"type": "error", "text": str(e)[:200]})
@@ -101,7 +101,7 @@ async def live(ws: WebSocket):
             pass
 
     try:
-        await muse_live.live_session(data["org"], user.get("name") or "", page, incoming(), send)
+        await muse_live.live_session(data["org"], user.get("name") or "", page, incoming(), send, user)
     except WebSocketDisconnect:
         pass
     except Exception as e:  # noqa: BLE001
