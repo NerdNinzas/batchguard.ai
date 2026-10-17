@@ -12,7 +12,7 @@ from fastapi import Depends, HTTPException, Request, Response
 from .config import settings
 from .db import conn, row
 
-COOKIE = "bg_session"
+COOKIE = "__session"  # the only cookie Firebase Hosting forwards to Cloud Run
 SESSION_DAYS = 14
 
 
