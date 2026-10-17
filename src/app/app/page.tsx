@@ -75,13 +75,11 @@ export default function OverviewPage() {
 
   return (
     <div className="space-y-6">
-      <MuseConsole />
-
       {/* hero */}
       <section data-hl="hero" className={`relative overflow-hidden rounded-3xl text-white shadow-[0_24px_60px_-24px_rgba(11,26,51,.6)]${hl("hero")}`}>
-        <img src="/machines/conveyor.jpg" alt="" className="absolute inset-0 h-full w-full object-cover" />
-        <div className="absolute inset-0 bg-gradient-to-r from-[#0b1a33]/95 via-[#0b1a33]/80 to-[#1e6fff]/40" />
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_70%_50%,rgba(30,111,255,.25),transparent_60%)]" />
+        <img src="/machines/motor.jpg" alt="" className="absolute inset-0 h-full w-full object-cover object-[center_40%]" />
+        <div className="absolute inset-0 bg-gradient-to-r from-[#0b1a33]/95 via-[#0b1a33]/85 to-[#0b1a33]/80" />
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_20%_30%,rgba(30,111,255,.28),transparent_55%)]" />
         <div className="relative grid gap-6 p-7 lg:grid-cols-[1.4fr_1fr] lg:p-9">
           <div>
             <p className="font-mono text-[11px] uppercase tracking-[0.3em] text-sky">{greet}, {firstName} · {d.org.name}</p>
@@ -105,7 +103,7 @@ export default function OverviewPage() {
               { l: "Critical", v: c.critical, i: Siren, t: c.critical ? "text-red" : "text-green" },
               { l: "Mean time to ack", v: c.mean_ack_seconds != null ? `${c.mean_ack_seconds}s` : "—", i: Clock, t: "text-white" },
             ].map(({ l, v, i: Icon, t }) => (
-              <div key={l} className="rounded-2xl border border-white/15 bg-white/10 p-4 backdrop-blur">
+              <div key={l} className="rounded-2xl border border-white/15 bg-[#0b1a33]/70 p-4 shadow-[0_12px_30px_-16px_rgba(0,0,0,.8)] backdrop-blur">
                 <div className="flex items-center justify-between"><p className="font-mono text-[10px] uppercase tracking-[0.2em] text-white/60">{l}</p><Icon size={14} className="text-white/50" /></div>
                 <p className={`font-display mt-1 text-3xl font-semibold ${t}`}>{v}</p>
               </div>
@@ -113,6 +111,8 @@ export default function OverviewPage() {
           </div>
         </div>
       </section>
+
+      <MuseConsole />
 
       {/* machines */}
       <section data-hl="machines" className={`rounded-3xl${hl("machines")}`}>

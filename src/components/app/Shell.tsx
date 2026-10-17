@@ -8,7 +8,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { MuseChip } from "@/components/muse/MuseChip";
-import { MuseVoiceBar } from "@/components/muse/MuseConsole";
+import { MuseVoiceBar, MuseVoiceFab } from "@/components/muse/MuseConsole";
 import { MuseLiveProvider } from "@/components/muse/MuseLive";
 import { MuseLogo } from "@/components/muse/MuseLogo";
 import { Badge } from "@/components/ui/Primitives";
@@ -218,6 +218,7 @@ export function Shell({ children }: { children: ReactNode }) {
 
         {pathname !== "/app" && <MuseChip line={museLine} />}
         {pathname !== "/app" && <MuseVoiceBar />}
+        <MuseVoiceFab />
       </div>
       </MuseLiveProvider>
     </Ctx.Provider>
