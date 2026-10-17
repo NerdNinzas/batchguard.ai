@@ -1,4 +1,5 @@
 "use client";
+import { Spot } from "@/components/muse/MuseLive";
 
 import { ExternalLink, Mail, Send } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -74,7 +75,7 @@ export default function SettingsPage() {
   return (
     <div className="space-y-5">
       <div className="grid gap-5 lg:grid-cols-2">
-        <Card title="Organisation">
+        <Spot k="org"><Card title="Organisation">
           <div className="grid gap-3 sm:grid-cols-2">
             <Input label="Name" value={org.name} onChange={(e) => setOrg({ ...org, name: e.target.value })} className="sm:col-span-2" />
             <Input label="Owner" value={org.owner_name} onChange={(e) => setOrg({ ...org, owner_name: e.target.value })} />
@@ -83,8 +84,8 @@ export default function SettingsPage() {
             <Input label="Industry" value={org.industry} onChange={(e) => setOrg({ ...org, industry: e.target.value })} />
           </div>
           <div className="mt-4 flex justify-end"><Button onClick={saveOrg}>Save</Button></div>
-        </Card>
-        <Card title="Integrations">
+        </Card></Spot>
+        <Spot k="integrations"><Card title="Integrations">
           {!health ? <Spinner /> : (
             <div className="space-y-2 text-sm">
               {[
@@ -98,12 +99,12 @@ export default function SettingsPage() {
               ))}
             </div>
           )}
-        </Card>
+        </Card></Spot>
       </div>
 
-      <EmailCard email={email} />
+      <Spot k="email"><EmailCard email={email} /></Spot>
 
-      <Card title="Blind evaluation" action={score && <Badge tone="violet">{score.summary.runs} run(s)</Badge>}>
+      <Spot k="eval"><Card title="Blind evaluation" action={score && <Badge tone="violet">{score.summary.runs} run(s)</Badge>}>
         <p className="text-sm text-muted">Record the hidden fault label first (stored where the agent&apos;s tools cannot read it), then start the fault on the device. The first incident after that timestamp is scored against the label.</p>
         {score && (
           <div className="mt-3 grid gap-3 sm:grid-cols-4">
@@ -123,13 +124,13 @@ export default function SettingsPage() {
           <table className="mt-4 w-full text-left text-xs"><thead className="font-mono text-[10px] uppercase tracking-wider text-muted"><tr><th className="py-1">when</th><th className="py-1">label</th><th className="py-1">predicted</th><th className="py-1">detected</th><th className="py-1">delay</th><th className="py-1">top-1</th><th className="py-1">top-3</th></tr></thead>
             <tbody>{score.runs.map((r) => <tr key={r.id} className="border-t border-line"><td className="py-1.5 text-muted">{fmtAgo(r.injected_at)}</td><td className="py-1.5 font-mono">{r.injected_fault}</td><td className="py-1.5">{r.predicted.join(" › ") || "—"}</td><td className="py-1.5">{r.detected ? "yes" : "no"}</td><td className="py-1.5 font-mono">{r.detect_delay ?? "—"}s</td><td className="py-1.5">{r.top1 ? "✓" : "✗"}</td><td className="py-1.5">{r.top3 ? "✓" : "✗"}</td></tr>)}</tbody></table>
         )}
-      </Card>
+      </Card></Spot>
 
-      <Card title="Device sample client">
+      <Spot k="device-sample"><Card title="Device sample client">
         <p className="text-sm text-muted">A reference device that posts realistic readings every second (optionally with a fault ramp). Use the device ID and key from any verified machine.</p>
         <pre className="mt-3 overflow-x-auto rounded-xl bg-ink p-4 font-mono text-xs text-[#cfe3ff]">{`cd backend && .venv/bin/python scripts/device_sample.py \\
   --device <device_id> --key <api_key> --type conveyor --fault bearing_wear --ramp 120`}</pre>
-      </Card>
+      </Card></Spot>
     </div>
   );
 }

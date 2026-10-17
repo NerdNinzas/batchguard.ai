@@ -1,4 +1,5 @@
 "use client";
+import { Spot } from "@/components/muse/MuseLive";
 
 import { Plus, Save, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -27,10 +28,10 @@ export default function ContactsPage() {
 
   return (
     <div className="space-y-5">
-      <Card title="Escalation ladder" action={<span className="text-xs text-muted">Warning → email #1 · Critical → email + call #1 · no ack in 2 min → next contact, repeat</span>}>
+      <Spot k="ladder"><Card title="Escalation ladder" action={<span className="text-xs text-muted">Warning → email #1 · Critical → email + call #1 · no ack in 2 min → next contact, repeat</span>}>
         <div className="space-y-3">
           {items.map((c) => (
-            <div key={c.id} className="grid gap-2 rounded-xl border border-line bg-white p-3 sm:grid-cols-[auto_1fr_1fr_1fr_1fr_auto_auto_auto] sm:items-end">
+            <Spot key={c.id} k={c.id} className="rounded-xl"><div className="grid gap-2 rounded-xl border border-line bg-white p-3 sm:grid-cols-[auto_1fr_1fr_1fr_1fr_auto_auto_auto] sm:items-end">
               <input type="number" min={1} value={c.escalation_order} onChange={(e) => set(c.id, { escalation_order: Number(e.target.value) })} className="w-14 rounded-lg border border-line px-2 py-2 text-center font-mono text-sm" />
               <Input label="Name" value={c.name} onChange={(e) => set(c.id, { name: e.target.value })} />
               <Input label="Role" value={c.role} onChange={(e) => set(c.id, { role: e.target.value })} />
@@ -39,10 +40,10 @@ export default function ContactsPage() {
               <Input label="Quiet from" type="time" value={c.quiet_start ?? ""} onChange={(e) => set(c.id, { quiet_start: e.target.value })} className="w-28" />
               <Input label="to" type="time" value={c.quiet_end ?? ""} onChange={(e) => set(c.id, { quiet_end: e.target.value })} className="w-28" />
               <div className="flex gap-1"><Button size="sm" variant="secondary" onClick={() => save(c)}><Save size={14} /></Button><Button size="sm" variant="ghost" onClick={() => remove(c.id)}><Trash2 size={14} /></Button></div>
-            </div>
+            </div></Spot>
           ))}
         </div>
-      </Card>
+      </Card></Spot>
       <Card title="Add contact">
         <div className="grid gap-2 sm:grid-cols-5 sm:items-end">
           <Input label="Name" value={draft.name ?? ""} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />

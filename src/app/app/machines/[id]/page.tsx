@@ -8,7 +8,7 @@ import { useCallback, useEffect, useState } from "react";
 import { KeyReveal } from "@/components/app/KeyReveal";
 import { WorkOrdersBoard } from "@/components/app/WorkOrders";
 import { useApp } from "@/components/app/Shell";
-import { useHighlight } from "@/components/muse/MuseLive";
+import { Spot, useHighlight } from "@/components/muse/MuseLive";
 import { HealthRing, LimitChart } from "@/components/app/charts";
 import { Badge, Button, Card, Modal, Spinner, StatusDot, statusTone } from "@/components/ui/Primitives";
 import { useToast } from "@/components/ui/Toast";
@@ -118,7 +118,7 @@ export default function MachinePage() {
         {m.parameters.map((p) => {
           const l = m.latest[p.name];
           return (
-            <Card key={p.name} title={<span className="font-mono text-base">{p.name}</span>} action={<span className={`font-mono text-2xl font-semibold ${l?.state === "critical" ? "text-red" : l?.state === "warning" ? "text-amber" : "text-ink"}`}>{l ? `${l.value.toFixed(2)} ${p.unit ?? ""}` : "—"}</span>}>
+            <Spot key={p.name} k={`param:${p.name}`}><Card title={<span className="font-mono text-base">{p.name}</span>} action={<span className={`font-mono text-2xl font-semibold ${l?.state === "critical" ? "text-red" : l?.state === "warning" ? "text-amber" : "text-ink"}`}>{l ? `${l.value.toFixed(2)} ${p.unit ?? ""}` : "—"}</span>}>
               <LimitChart data={series[p.name] ?? []} param={p} />
               {l?.forecast && (l.forecast.eta_crit_seconds != null || l.forecast.eta_warn_seconds != null) && (
                 <div className={`mt-2 flex items-center gap-2 rounded-xl px-3 py-2 text-[12px] ${l.forecast.eta_crit_seconds != null && l.forecast.eta_crit_seconds < 1800 ? "bg-red/10 text-red" : "bg-amber/10 text-amber"}`}>
@@ -132,17 +132,17 @@ export default function MachinePage() {
                 </div>
               )}
               <p className="mt-2 font-mono text-[10px] text-muted">normal {p.normal_min ?? "–"}–{p.normal_max ?? "–"} · warn {p.warn_low ?? "–"}/{p.warn_high ?? "–"} · crit {p.crit_low ?? "–"}/{p.crit_high ?? "–"}{p.source_page ? ` · manual p.${p.source_page}` : ""}</p>
-            </Card>
+            </Card></Spot>
           );
         })}
       </div>
 
-      <Card title={<span className="flex items-center gap-2"><ClipboardList size={18} className="text-blue" /> Maintenance work orders</span>} action={<span className="text-xs text-muted">from Muse&apos;s checks or added by hand</span>}>
+      <Spot k="work-orders"><Card title={<span className="flex items-center gap-2"><ClipboardList size={18} className="text-blue" /> Maintenance work orders</span>} action={<span className="text-xs text-muted">from Muse&apos;s checks or added by hand</span>}>
         <WorkOrdersBoard machineId={id} contacts={contacts} />
-      </Card>
+      </Card></Spot>
 
       <div className="grid gap-4 lg:grid-cols-[1fr_1fr]">
-        <Card title="Incidents">
+        <Spot k="incidents"><Card title="Incidents">
           {incidents.length === 0 && <p className="text-sm text-muted">None yet.</p>}
           <div className="space-y-2">
             {incidents.slice(0, 8).map((i) => (
@@ -156,8 +156,8 @@ export default function MachinePage() {
               </Link>
             ))}
           </div>
-        </Card>
-        <Card title="Events & logs">
+        </Card></Spot>
+        <Spot k="events"><Card title="Events & logs">
           {events.length === 0 && <p className="text-sm text-muted">No events. Devices can post E-stop, jam sensor etc. to /v1/events.</p>}
           <ul className="space-y-1.5">
             {events.map((e) => (
@@ -168,11 +168,11 @@ export default function MachinePage() {
               </li>
             ))}
           </ul>
-        </Card>
+        </Card></Spot>
       </div>
 
       {m.knowledge.length > 0 && (
-        <Card title="Knowledge from the manual">
+        <Spot k="knowledge"><Card title="Knowledge from the manual">
           <div className="grid gap-3 md:grid-cols-2">
             {m.knowledge.map((k, i) => (
               <div key={i} className="rounded-xl border border-line bg-white p-3">
@@ -181,12 +181,12 @@ export default function MachinePage() {
               </div>
             ))}
           </div>
-        </Card>
+        </Card></Spot>
       )}
 
-      <Card title={<span className="flex items-center gap-2"><KeyRound size={18} className="text-blue" /> Device connection</span>}>
+      <Spot k="device"><Card title={<span className="flex items-center gap-2"><KeyRound size={18} className="text-blue" /> Device connection</span>}>
         <KeyReveal machine={m} apiKey={rotated?.api_key} codes={rotated?.code} />
-      </Card>
+      </Card></Spot>
 
       <Modal open={confirmDel} onClose={() => setConfirmDel(false)} title="Delete this machine?">
         <p className="text-sm text-muted">All readings, events and its device key are removed. Incidents are kept for history.</p>

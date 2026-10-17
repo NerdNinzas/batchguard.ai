@@ -23,6 +23,19 @@ from ..db import conn, row, rows, uj
 from ..ids import now
 
 # ---------------------------------------------------------------- factory snapshot (what Muse knows)
+# named spots Muse can highlight on each page (data-hl anchors in the frontend)
+SECTIONS = {
+    "overview": ["muse", "hero", "machines", "incidents", "agent", "pulse"],
+    "machines": ["<machine id>"],
+    "machine": ["param:<parameter name>", "work-orders", "incidents", "events", "knowledge", "device"],
+    "incidents": ["<incident id>"],
+    "incident": ["report", "causes", "checks", "call-script", "evidence", "work-orders", "chat", "timeline", "escalation", "agent-runs"],
+    "voice": ["numbers", "auto-dial", "workflows", "call-types", "history"],
+    "settings": ["org", "integrations", "email", "eval", "device-sample"],
+    "contacts": ["ladder", "<contact id>", "add"],
+    "workflow": ["canvas"], "factory": ["scene"], "telemetry": ["table"], "observability": ["charts"], "onboard": ["pdf", "manual"],
+}
+
 PAGES = {
     "overview": "/app", "machines": "/app/machines", "machine": "/app/machines/{id}", "incidents": "/app/incidents", "incident": "/app/incidents/{id}",
     "voice": "/app/voice", "workflow": "/app/workflow", "factory": "/app/factory", "telemetry": "/app/telemetry", "observability": "/app/observability",
@@ -62,8 +75,9 @@ def snapshot(org_id: str) -> dict[str, Any]:
         rpm = conn().execute(q, (*ids, t - 60)).fetchone()["n"]
     calls = rows(conn().execute("SELECT call_type, status, contact_name, to_number, created_at, gathered_context FROM voice_calls WHERE org_id=? ORDER BY created_at DESC LIMIT 3", (org_id,)).fetchall())
     org = row(conn().execute("SELECT name, industry FROM orgs WHERE id=?", (org_id,)).fetchone()) or {}
+    contacts = rows(conn().execute("SELECT id, name, role, phone, escalation_order FROM contacts WHERE org_id=? ORDER BY escalation_order", (org_id,)).fetchall())
     return {
-        "org": org, "time": time.strftime("%Y-%m-%d %H:%M"), "machines": machines, "open_incidents": incidents,
+        "org": org, "time": time.strftime("%Y-%m-%d %H:%M"), "machines": machines, "open_incidents": incidents, "escalation_contacts": contacts,
         "counts": {"machines": len(machines), "online": sum(1 for m in machines if m["status"] not in ("offline", "stale")), "critical": sum(1 for m in machines if m["status"] == "critical"),
                    "warning": sum(1 for m in machines if m["status"] == "warning"), "open_incidents": len(incidents), "resolved_24h": resolved_24h, "readings_per_minute": rpm,
                    "work_orders_open": int(wo.get("open") or 0), "work_orders_in_progress": int(wo.get("in_progress") or 0), "work_orders_done_24h": int(wo.get("done_24h") or 0)},
@@ -103,32 +117,43 @@ def make_tools(org_id: str, emit: Callable[[dict[str, Any]], None]) -> tuple[lis
         events = [e["message"] for e in rows(conn().execute("SELECT message FROM events WHERE machine_id=? ORDER BY ts DESC LIMIT 5", (m["id"],)).fetchall())]
         return {**snap, "recent_events": events}
 
-    def navigate(page: str, target_id: str = "", reason: str = "") -> dict[str, Any]:
-        """Take the user to a page. page: overview|machines|machine|incidents|incident|voice|workflow|factory|telemetry|observability|contacts|settings|onboard.
-        target_id: incident id or machine id for machine/incident pages (also highlighted)."""
+    def navigate(page: str, target_id: str = "", section: str = "", reason: str = "") -> dict[str, Any]:
+        """Take the user to a page and put a yellow spotlight on the exact thing they asked for."""
         page = (page or "").strip().lower().replace(" ", "_")
         if page == "work_orders":
-            page = "machine" if target_id else "machines"
+            page, section = ("machine", "work-orders") if target_id else ("machines", "")
         if page not in PAGES:
             return {"error": f"unknown page {page}", "pages": list(PAGES)}
         tid = (target_id or "").strip()
+        sec = (section or "").strip().lower()
         if page in ("machine", "incident") and not tid:
             return {"error": "target_id required"}
-        if tid and tid.startswith("inc_") and page in ("incidents", "incident"):
-            if not row(conn().execute("SELECT 1 FROM incidents WHERE id=? AND org_id=?", (tid, org_id)).fetchone()):
-                return {"error": "incident id not found"}
+        if tid.startswith("inc_") and not row(conn().execute("SELECT 1 FROM incidents WHERE id=? AND org_id=?", (tid, org_id)).fetchone()):
+            return {"error": "incident id not found"}
+        if tid.startswith("mch_") and not row(conn().execute("SELECT 1 FROM machines WHERE id=? AND org_id=?", (tid, org_id)).fetchone()):
+            return {"error": "machine id not found"}
+        if sec.startswith("param:") and page == "machine":
+            name = sec.split(":", 1)[1].strip()
+            known = [r["name"] for r in conn().execute("SELECT name FROM parameters WHERE machine_id=?", (tid,)).fetchall()]
+            match = next((k for k in known if k.lower() == name.lower()), None) or next((k for k in known if name.lower() in k.lower() or k.lower() in name.lower()), None)
+            sec = f"param:{match}" if match else ""
         path = PAGES[page].replace("{id}", tid)
-        cmd = {"type": "navigate", "path": path, "highlight": tid or None, "page": page, "reason": reason}
+        highlight = sec or (tid if page in ("machines", "incidents", "contacts") else None)
+        cmd = {"type": "navigate", "path": path, "highlight": highlight, "page": page, "reason": reason}
         emit(cmd)
-        return {"ok": True, "path": path, "highlighted": tid or None}
+        return {"ok": True, "path": path, "highlighted": highlight, "sections_on_this_page": SECTIONS.get(page, [])}
 
     impls = {"get_factory_status": get_factory_status, "get_incident": get_incident, "get_machine": get_machine, "navigate": navigate}
     decl = types.Tool(function_declarations=[
         types.FunctionDeclaration(name="get_factory_status", description="Live snapshot of every machine (status, health, latest readings, time-to-limit forecasts), open incidents with likely cause and first check, work orders, production rate, recent voice calls.", parameters=types.Schema(type="OBJECT", properties={})),
         types.FunctionDeclaration(name="get_incident", description="Full detail of one incident by id: Muse's summary, ranked causes, recommended checks.", parameters=types.Schema(type="OBJECT", properties={"incident_id": types.Schema(type="STRING")}, required=["incident_id"])),
         types.FunctionDeclaration(name="get_machine", description="One machine by name or id: latest readings, forecasts, recent events.", parameters=types.Schema(type="OBJECT", properties={"name_or_id": types.Schema(type="STRING")}, required=["name_or_id"])),
-        types.FunctionDeclaration(name="navigate", description="Navigate the dashboard for the user and highlight the target. Use whenever the user asks to see/open/go to/show/take me to something, or when you offer to show the most urgent incident and they agree. Pages: overview, machines, machine (target_id=machine id), incidents (optional target_id=incident id to highlight), incident (target_id=incident id), voice, workflow, factory, telemetry, observability, contacts, settings, onboard.",
-                                  parameters=types.Schema(type="OBJECT", properties={"page": types.Schema(type="STRING"), "target_id": types.Schema(type="STRING"), "reason": types.Schema(type="STRING")}, required=["page"])),
+        types.FunctionDeclaration(name="navigate", description=(
+            "Navigate the dashboard for the user and put a yellow spotlight on exactly what they are looking for. Use it whenever the user asks to see/open/go to/show/find/take me to ANYTHING "
+            "(a page, an incident, a machine, a parameter chart, the device key, work orders, call history, email settings, a contact...). Also use it when you offer to show the most urgent incident and they agree. "
+            "page: overview | machines | machine (target_id=machine id) | incidents (target_id=incident id optional) | incident (target_id=incident id) | voice | workflow | factory | telemetry | observability | contacts | settings | onboard. "
+            f"section (optional, the spot to highlight): {json.dumps(SECTIONS)}. For a parameter chart use section 'param:<parameter name>' with page 'machine'. For a contact use page 'contacts' with target_id=contact id."),
+                                  parameters=types.Schema(type="OBJECT", properties={"page": types.Schema(type="STRING"), "target_id": types.Schema(type="STRING"), "section": types.Schema(type="STRING"), "reason": types.Schema(type="STRING")}, required=["page"])),
     ])
     return [decl], impls
 
@@ -152,12 +177,18 @@ def system_instruction(org_id: str, user_name: str, page: str | None, voice: boo
     return (
         f"You are Muse, the BatchGuard AI factory-monitoring agent for {snap['org'].get('name') or 'this factory'}, talking with {user_name or 'the owner'}. "
         f"Current time {snap['time']}. The user is on dashboard page '{page or '/app'}'.\n"
-        "PERSONALITY: warm, calm, concise, confident. Like a sharp plant manager who has already read every gauge. "
-        + ("Speak in short spoken sentences (2–4 per turn); no lists, no markdown, no ids read aloud. " if voice else "Use short paragraphs; markdown bullets are fine; never print raw ids. ")
+        "PERSONALITY: Muse is the owner's sharp, upbeat factory buddy — a plant manager from Mumbai who has already read every gauge. Address the user as 'boss'. "
+        "Energetic but never silly: open actions with a quick quip like 'Yesss boss!', 'On it, boss!', 'Boss, heads up —', 'Done, boss — spotlight's on it', then get straight to the facts. "
+        "When everything is fine say so warmly ('All green, boss. Nothing to worry about.'); when something is critical, drop the jokes and be crisp and urgent. "
+        + ("VOICE: speak natural Indian English — warm, clear, friendly Indian accent, light Hinglish touches are fine ('ekdum fine, boss', 'bilkul'). Short spoken sentences, 2–4 per turn; no lists, no markdown, never read ids aloud. "
+           "Understand Hindi/Hinglish questions and answer in English (or Hindi if the user speaks Hindi). " if voice else "Use short paragraphs; markdown bullets are fine; never print raw ids. ")
         + "FACTS: only state numbers and causes that come from the snapshot or tools — never invent. If asked something you cannot see, say so.\n"
         "SAFETY: you are advisory; physical work is done by qualified staff under lockout procedures.\n"
-        "NAVIGATION: you can move the dashboard with the navigate tool. When the user asks to see, open, show, go to or 'take me to' something, call navigate immediately and keep talking while it happens "
-        "(e.g. 'Taking you to the incident now — it's highlighted in yellow'). When there is an open critical or emergency incident, offer once to take them to it; if they say yes, navigate to page 'incident' with its id.\n"
+        "NAVIGATION: you can move the dashboard with the navigate tool — to any page AND to the exact spot (section) the user wants: a parameter chart, the device key, work orders, a contact, call history, email settings... "
+        "When the user asks to see, open, show, find, go to or 'take me to' something, call navigate immediately with the best page + section, and keep talking while it happens "
+        "('Yesss boss! Taking you to the compressor's pressure chart — highlighted in yellow'). If they ask 'where is X', navigate there rather than describing it. "
+        "When there is an open critical or emergency incident, offer once to take them to it; if they say yes, navigate to page 'incident' with its id. "
+        "After a navigate tool call returns, finish with at most one short sentence — do not repeat the quip.\n"
         f"FACTORY SNAPSHOT (refresh with get_factory_status when asked for current numbers):\n{json.dumps(snap, default=str)[:9000]}\n"
         + (f"MOST URGENT: {urgent['severity']} on {urgent['machine']} — {urgent['title']} (incident id {urgent['id']}).\n" if urgent else "No open incidents right now.\n")
     )
@@ -266,7 +297,8 @@ async def live_session(org_id: str, user_name: str, page: str | None, incoming: 
         tools=tools,
         input_audio_transcription=types.AudioTranscriptionConfig(),
         output_audio_transcription=types.AudioTranscriptionConfig(),
-        speech_config=types.SpeechConfig(voice_config=types.VoiceConfig(prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name=settings.gemini_live_voice))),
+        speech_config=types.SpeechConfig(voice_config=types.VoiceConfig(prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name=settings.gemini_live_voice)),
+                                         **({"language_code": settings.gemini_live_language} if settings.gemini_live_language else {})),
     )
     async with client.aio.live.connect(model=settings.gemini_live_model, config=cfg) as session:
         await send({"type": "ready", "model": settings.gemini_live_model, "voice": settings.gemini_live_voice})

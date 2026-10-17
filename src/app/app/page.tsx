@@ -7,6 +7,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useApp } from "@/components/app/Shell";
 import { MuseConsole } from "@/components/muse/MuseConsole";
+import { useMuse } from "@/components/muse/MuseLive";
 import { Bars, HealthRing, Sparkline } from "@/components/app/charts";
 import { Badge, Button, Empty, Spinner, StatusDot, statusTone } from "@/components/ui/Primitives";
 import { fmtAgo, fmtTime, get } from "@/lib/api";
@@ -29,6 +30,8 @@ type Overview = {
 const SEV_BG: Record<string, string> = { critical: "bg-red", emergency: "bg-red", warning: "bg-amber", info: "bg-blue" };
 
 export default function OverviewPage() {
+  const { highlight } = useMuse();
+  const hl = (k: string) => (highlight === k ? " muse-highlight" : "");
   const { subscribe, user } = useApp();
   const [d, setD] = useState<Overview | null>(null);
   const [sparks, setSparks] = useState<Record<string, number[]>>({});
@@ -75,7 +78,7 @@ export default function OverviewPage() {
       <MuseConsole />
 
       {/* hero */}
-      <section className="relative overflow-hidden rounded-3xl text-white shadow-[0_24px_60px_-24px_rgba(11,26,51,.6)]">
+      <section data-hl="hero" className={`relative overflow-hidden rounded-3xl text-white shadow-[0_24px_60px_-24px_rgba(11,26,51,.6)]${hl("hero")}`}>
         <img src="/machines/conveyor.jpg" alt="" className="absolute inset-0 h-full w-full object-cover" />
         <div className="absolute inset-0 bg-gradient-to-r from-[#0b1a33]/95 via-[#0b1a33]/80 to-[#1e6fff]/40" />
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_70%_50%,rgba(30,111,255,.25),transparent_60%)]" />
@@ -112,7 +115,7 @@ export default function OverviewPage() {
       </section>
 
       {/* machines */}
-      <section>
+      <section data-hl="machines" className={`rounded-3xl${hl("machines")}`}>
         <div className="mb-3 flex items-end justify-between">
           <div><p className="font-mono text-[10px] uppercase tracking-[0.25em] text-blue">Line health</p><h2 className="font-display text-2xl font-semibold text-ink">Your machines, live</h2></div>
           <Link href="/app/machines" className="text-sm font-semibold text-blue hover:underline">All machines →</Link>
@@ -164,7 +167,7 @@ export default function OverviewPage() {
 
       {/* pulse + incidents + agent */}
       <div className="grid gap-5 xl:grid-cols-3">
-        <section className="card rounded-2xl p-5 xl:col-span-2">
+        <section data-hl="incidents" className={`card rounded-2xl p-5 xl:col-span-2${hl("incidents")}`}>
           <div className="mb-3 flex items-center justify-between">
             <div><p className="font-mono text-[10px] uppercase tracking-[0.25em] text-blue">Line pulse</p><h3 className="font-display text-xl font-semibold text-ink">Readings ingested · last 30 min</h3></div>
             <Badge tone="green"><Activity size={10} /> streaming</Badge>
@@ -177,7 +180,7 @@ export default function OverviewPage() {
           </div>
         </section>
 
-        <section className="card rounded-2xl p-5">
+        <section data-hl="agent" className={`card rounded-2xl p-5${hl("agent")}`}>
           <div className="mb-3 flex items-center justify-between">
             <div><p className="font-mono text-[10px] uppercase tracking-[0.25em] text-red">Incidents</p><h3 className="font-display text-xl font-semibold text-ink">Recent</h3></div>
             <Link href="/app/incidents" className="text-xs font-semibold text-blue hover:underline">All →</Link>
@@ -202,7 +205,7 @@ export default function OverviewPage() {
       </div>
 
       {/* agent strip */}
-      <section className="card flex flex-wrap items-center gap-4 rounded-2xl p-4">
+      <section data-hl="pulse" className={`card flex flex-wrap items-center gap-4 rounded-2xl p-4${hl("pulse")}`}>
         <img src="/muse.webp" alt="" className="h-16 w-auto" />
         <div className="min-w-0 flex-1">
           <p className="font-display text-lg font-semibold text-ink">Muse · {d.gemini_enabled ? "ADK pipeline on Gemini" : "rule-based investigator"}</p>

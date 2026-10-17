@@ -8,7 +8,10 @@
 
 import { usePathname, useRouter } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useToast } from "@/components/ui/Toast";
 import { get } from "@/lib/api";
+
+const QUIPS = ["Yesss boss! Taking you there…", "On it, boss — spotlight's on it.", "Boss, this way 👉", "Done, boss. Highlighted in yellow.", "Ekdum, boss — right here."];
 
 export type ChatMsg = { id: string; role: "user" | "muse"; text: string; streaming?: boolean; tool?: string; action?: { label: string; path: string; highlight?: string | null } | null };
 export type VoiceState = "off" | "connecting" | "listening" | "speaking" | "error";
@@ -25,6 +28,7 @@ type MuseCtx = {
   captions: { role: "user" | "muse"; text: string }[];
   liveCaption: { user: string; muse: string };
   level: number;
+  outLevel: number;
   startVoice: () => Promise<void>;
   stopVoice: () => void;
   goTo: (path: string, highlight?: string | null) => void;
@@ -65,6 +69,7 @@ function pcm16Base64ToFloat(b64: string): Float32Array<ArrayBuffer> {
 export function MuseLiveProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
+  const { toast } = useToast();
   const pathRef = useRef(pathname);
   useEffect(() => { pathRef.current = pathname; }, [pathname]);
 
@@ -76,19 +81,21 @@ export function MuseLiveProvider({ children }: { children: ReactNode }) {
   const [captions, setCaptions] = useState<{ role: "user" | "muse"; text: string }[]>([]);
   const [liveCaption, setLiveCaption] = useState({ user: "", muse: "" });
   const [level, setLevel] = useState(0);
+  const [outLevel, setOutLevel] = useState(0);
   const [highlight, setHighlight] = useState<string | null>(null);
   const [lastNav, setLastNav] = useState<NavCmd | null>(null);
   const hlTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const goTo = useCallback((path: string, hl?: string | null) => {
+  const goTo = useCallback((path: string, hl?: string | null, quiet = false) => {
     setLastNav({ type: "navigate", path, highlight: hl ?? null });
+    if (!quiet) toast("info", QUIPS[Math.floor(Math.random() * QUIPS.length)], hl ? "Look for the yellow spotlight." : undefined, 3500);
     if (hl) {
       setHighlight(hl);
       if (hlTimer.current) clearTimeout(hlTimer.current);
       hlTimer.current = setTimeout(() => setHighlight(null), 14000);
     }
     if (pathRef.current !== path) router.push(path);
-  }, [router]);
+  }, [router, toast]);
 
   /* ---------- greeting (once per session) ---------- */
   useEffect(() => {
@@ -170,6 +177,7 @@ export function MuseLiveProvider({ children }: { children: ReactNode }) {
     outCtx.current = null;
     setVoice("off");
     setLevel(0);
+    setOutLevel(0);
     setLiveCaption({ user: "", muse: "" });
   }, [stopPlayback]);
 
@@ -202,6 +210,12 @@ export function MuseLiveProvider({ children }: { children: ReactNode }) {
           const f32 = pcm16Base64ToFloat(String(msg.data));
           const ctx = outCtx.current;
           if (!ctx) return;
+          let acc = 0;
+          for (let i = 0; i < f32.length; i += 16) acc += f32[i] * f32[i];
+          const rms = Math.sqrt(acc / (f32.length / 16));
+          const delay = Math.max(0, (playHead.current - ctx.currentTime) * 1000);
+          setTimeout(() => setOutLevel(Math.min(1, rms * 5)), delay);
+          setTimeout(() => setOutLevel((v) => v * 0.4), delay + Math.max(80, (f32.length / 24000) * 1000));
           const buf = ctx.createBuffer(1, f32.length, 24000);
           buf.copyToChannel(f32, 0);
           const src = ctx.createBufferSource();
@@ -265,8 +279,8 @@ export function MuseLiveProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => () => { wsRef.current?.close(); micStream.current?.getTracks().forEach((t) => t.stop()); }, []);
 
-  const value = useMemo<MuseCtx>(() => ({ messages, busy, send, reset, greeting, voice, voiceError, captions, liveCaption, level, startVoice, stopVoice, goTo, highlight, lastNav }),
-    [messages, busy, send, reset, greeting, voice, voiceError, captions, liveCaption, level, startVoice, stopVoice, goTo, highlight, lastNav]);
+  const value = useMemo<MuseCtx>(() => ({ messages, busy, send, reset, greeting, voice, voiceError, captions, liveCaption, level, outLevel, startVoice, stopVoice, goTo, highlight, lastNav }),
+    [messages, busy, send, reset, greeting, voice, voiceError, captions, liveCaption, level, outLevel, startVoice, stopVoice, goTo, highlight, lastNav]);
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 
@@ -280,4 +294,10 @@ export function useHighlight(id: string | null | undefined) {
     return () => clearTimeout(t);
   }, [on, id]);
   return { on, className: on ? "muse-highlight" : "" };
+}
+
+/** Wrap any block so Muse can spotlight it: <Spot k="checks">…</Spot> (keys are listed in the backend SECTIONS map). */
+export function Spot({ k, children, className = "" }: { k: string; children: ReactNode; className?: string }) {
+  const hl = useHighlight(k);
+  return <div data-hl={k} className={`rounded-2xl ${hl.className} ${className}`}>{children}</div>;
 }

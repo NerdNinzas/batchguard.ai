@@ -25,7 +25,8 @@ class Settings(BaseSettings):
     # Gemini Live (realtime voice for the Muse copilot) — Vertex AI, native audio
     gemini_live_model: str = "gemini-live-2.5-flash-native-audio"
     gemini_live_location: str = "us-central1"
-    gemini_live_voice: str = "Aoede"
+    gemini_live_voice: str = "Kore"
+    gemini_live_language: str = "en-IN"  # Indian English for the realtime voice
 
     gcp_project: str = ""
     gcp_location: str = "asia-southeast1"

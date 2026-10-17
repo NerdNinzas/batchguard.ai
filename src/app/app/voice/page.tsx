@@ -1,4 +1,5 @@
 "use client";
+import { Spot } from "@/components/muse/MuseLive";
 
 import "@xyflow/react/dist/style.css";
 import { Background, Handle, Position, ReactFlow, type Edge, type Node, type NodeProps } from "@xyflow/react";
@@ -418,7 +419,7 @@ export default function VoicePage() {
 
       <div className="grid gap-5 lg:grid-cols-[1.2fr_1fr]">
         {/* number picker */}
-        <Card title={<span className="flex items-center gap-2"><Phone size={18} className="text-blue" /> TeleCMI caller number</span>} action={<span className="text-xs text-muted">{status.telephony.configs.find((c) => c.provider === "ari")?.name ?? "TeleCMI"} · SIP trunk on Dograh</span>}>
+        <Spot k="numbers"><Card title={<span className="flex items-center gap-2"><Phone size={18} className="text-blue" /> TeleCMI caller number</span>} action={<span className="text-xs text-muted">{status.telephony.configs.find((c) => c.provider === "ari")?.name ?? "TeleCMI"} · SIP trunk on Dograh</span>}>
           <p className="mb-3 text-sm text-muted">Pick the number Muse calls from. Contacts see it on their phone, so choose one they can call back.</p>
           <div className="grid gap-2 sm:grid-cols-2">
             {telecmi.map((n) => {
@@ -437,11 +438,11 @@ export default function VoicePage() {
             {telecmi.length === 0 && <p className="text-sm text-muted sm:col-span-2">No TeleCMI numbers found on the Dograh account.</p>}
           </div>
           {others.length > 0 && <p className="mt-3 text-[11px] text-muted">Other trunks on the account: {others.map((n) => `${n.number} (${n.config_name})`).join(", ")} — not used.</p>}
-        </Card>
+        </Card></Spot>
 
         {/* escalation switch + sync */}
         <div className="space-y-5">
-          <Card title={<span className="flex items-center gap-2"><Siren size={18} className="text-red" /> Automatic escalation calls</span>}>
+          <Spot k="auto-dial"><Card title={<span className="flex items-center gap-2"><Siren size={18} className="text-red" /> Automatic escalation calls</span>}>
             <div className="flex items-start justify-between gap-4">
               <p className="text-sm text-muted">Critical → call contact #1 with the brief. No acknowledgement in {2} min → emergency, call the next contact, repeat. An acknowledgement spoken on the call acknowledges the incident.</p>
               <button onClick={toggleAuto} role="switch" aria-checked={!!status.settings.auto_dial} className={`relative h-7 w-12 shrink-0 rounded-full transition ${status.settings.auto_dial ? "bg-red" : "bg-line"}`}>
@@ -449,8 +450,8 @@ export default function VoicePage() {
               </button>
             </div>
             <p className="mt-2 text-[11px] text-muted">{status.settings.auto_dial ? "ON — real calls go out on every critical incident. Keep it off while the demo producer is injecting faults unless the contacts are yours." : "Off — calls are placed manually from an incident page or from a call type below."}</p>
-          </Card>
-          <Card title={<span className="flex items-center gap-2"><CloudUpload size={18} className="text-blue" /> Dograh workflows</span>} action={<Button size="sm" variant="secondary" onClick={() => sync()} loading={syncing === "all"}><RefreshCw size={14} /> Publish all</Button>}>
+          </Card></Spot>
+          <Spot k="workflows"><Card title={<span className="flex items-center gap-2"><CloudUpload size={18} className="text-blue" /> Dograh workflows</span>} action={<Button size="sm" variant="secondary" onClick={() => sync()} loading={syncing === "all"}><RefreshCw size={14} /> Publish all</Button>}>
             <ul className="space-y-1.5">
               {types.map((t) => (
                 <li key={t.key} className="flex items-center justify-between gap-2 text-xs">
@@ -460,13 +461,13 @@ export default function VoicePage() {
               ))}
             </ul>
             <p className="mt-2 text-[11px] text-muted">Each JSON file in <span className="font-mono">backend/app/voice/workflows</span> is pushed as a Dograh workflow and published; the call hits the published version.</p>
-          </Card>
+          </Card></Spot>
         </div>
       </div>
 
       {/* call types */}
       <div>
-        <div className="mb-3 flex items-end justify-between">
+        <div data-hl="call-types" className="mb-3 flex items-end justify-between">
           <div><h2 className="font-display text-2xl font-semibold text-ink">Call types</h2><p className="text-sm text-muted">Click one to read the workflow, every prompt, the extraction variables and the QC rubric — then place it.</p></div>
         </div>
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -493,7 +494,7 @@ export default function VoicePage() {
       </div>
 
       {/* history */}
-      <Card title={<span className="flex items-center gap-2"><AudioLines size={18} className="text-blue" /> Call history</span>} action={<Button size="sm" variant="ghost" onClick={() => load()}><RefreshCw size={14} /> Refresh</Button>}>
+      <Spot k="history"><Card title={<span className="flex items-center gap-2"><AudioLines size={18} className="text-blue" /> Call history</span>} action={<Button size="sm" variant="ghost" onClick={() => load()}><RefreshCw size={14} /> Refresh</Button>}>
         {calls.length === 0 ? <Empty title="No calls yet" body="Place a test call above, or open an incident and press “Call the on-call contact now”." /> : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -518,7 +519,7 @@ export default function VoicePage() {
             </table>
           </div>
         )}
-      </Card>
+      </Card></Spot>
 
       {/* call-type detail */}
       <Modal open={!!sel} onClose={() => setOpen(null)} width="max-w-6xl" title={sel ? <span className="flex items-center gap-3"><span className={`grid h-10 w-10 place-items-center rounded-2xl bg-sky-soft ${TONE_BG[sel.tone]?.split(" ").pop() ?? "text-blue"}`}>{ICONS[sel.icon]}</span>{sel.title}</span> : null}>
