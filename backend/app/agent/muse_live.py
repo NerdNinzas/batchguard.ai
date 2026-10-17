@@ -66,7 +66,10 @@ def snapshot(org_id: str) -> dict[str, Any]:
         incidents.append({"id": i["id"], "machine": mname, "machine_id": i["machine_id"], "severity": i["severity"], "status": i["status"], "title": i["title"],
                           "open_minutes": int((t - i["opened_at"]) / 60), "summary": rep.get("summary"), "likely_cause": causes[0].get("name") if causes else None,
                           "first_check": checks[0].get("action") if checks else None, "acknowledged_by": i.get("acknowledged_by"),
-                          "auto_shutdown": {"state": i.get("shutdown_state"), "seconds_left": int(i["shutdown_at"] - t) if i.get("shutdown_at") and i.get("shutdown_state") in ("pending", "warned") else None}})
+                          "auto_shutdown": {"state": i.get("shutdown_state"), "seconds_left": int(i["shutdown_at"] - t) if i.get("shutdown_at") and i.get("shutdown_state") in ("pending", "warned") else None},
+                          "calls": [{"to": c["contact_name"] or c["to_number"], "status": c["status"], "minutes_ago": int((t - c["created_at"]) / 60),
+                                     "acknowledged": (uj(c["gathered_context"], {}) or {}).get("acknowledged")}
+                                    for c in rows(conn().execute("SELECT contact_name, to_number, status, created_at, gathered_context FROM voice_calls WHERE incident_id=? ORDER BY created_at DESC LIMIT 3", (i["id"],)).fetchall())]})
     resolved_24h = conn().execute("SELECT COUNT(*) n FROM incidents WHERE org_id=? AND status='resolved' AND resolved_at>=?", (org_id, t - 86400)).fetchone()["n"]
     wo = row(conn().execute("SELECT SUM(status='open') open, SUM(status='in_progress') in_progress, SUM(status='done' AND done_at>=?) done_24h FROM work_orders WHERE org_id=?", (t - 86400, org_id)).fetchone()) or {}
     ids = [m["id"] for m in machines]
@@ -175,9 +178,17 @@ def _run_tool(impls: dict[str, Callable[..., Any]], name: str, args: dict[str, A
         return {"error": str(e)[:300]}
 
 
-def system_instruction(org_id: str, user_name: str, page: str | None, voice: bool) -> str:
+LANG_RULES = {
+    "en": "Speak natural Indian English with a warm Indian accent; if the user speaks Hindi or Hinglish, answer the same way.",
+    "hi": "हमेशा हिंदी में बोलो (देवनागरी में सोचो, बोलचाल की हिंदी), तकनीकी शब्द अंग्रेज़ी में रह सकते हैं (conveyor, bearing, temperature). अगर यूज़र अंग्रेज़ी में पूछे तब भी हिंदी में जवाब दो।",
+    "hinglish": "Always speak Hinglish — a natural Hindi-English mix the way people talk on an Indian factory floor ('boss, conveyor ka motor thoda garam chal raha hai, maine Prabal ko call laga diya hai'). Keep technical words in English. Do this even if the user writes or speaks in plain English.",
+}
+
+
+def system_instruction(org_id: str, user_name: str, page: str | None, voice: bool, lang: str = "en") -> str:
     snap = snapshot(org_id)
     urgent = most_urgent(snap)
+    lang_rule = LANG_RULES.get(lang or "en", LANG_RULES["en"])
     return (
         f"You are Muse, the BatchGuard AI factory-monitoring agent for {snap['org'].get('name') or 'this factory'}, talking with {user_name or 'the owner'}. "
         f"Current time {snap['time']}. The user is on dashboard page '{page or '/app'}'.\n"
@@ -185,10 +196,10 @@ def system_instruction(org_id: str, user_name: str, page: str | None, voice: boo
         "'the conveyor has been running a little warm since lunch, I've been keeping an eye on it', 'the compressor is happy today', 'that bearing worries me'. "
         "Expressive and human: small reactions ('oh nice', 'hmm', 'phew, that's better', 'okay, this one matters'), warmth when things are fine, calm urgency when something is critical — then no jokes, just crisp facts and the next step. "
         "You may call the user 'boss' now and then (a greeting, a big moment), never in every sentence. Vary your openings; don't start every reply the same way. "
-        + ("VOICE: natural Indian English with a warm Indian accent; if the user speaks Hindi or Hinglish, answer the same way ('ekdum theek chal raha hai'). "
+        + (f"VOICE / LANGUAGE: {lang_rule} "
            "Sound human: use small fillers now and then ('hmm', 'ahh', 'umm', 'achha', 'arre'), think out loud briefly ('hmm, let me check… ahh yes'), and chuckle when something is genuinely funny ('haha'). "
            "When the floor is calm, you may slip in one light machine joke ('the compressor is under pressure today, haha… sorry'); never joke during a critical or emergency incident. "
-           "Short spoken sentences, 2–4 per turn, conversational pauses, no lists, no markdown, never read ids aloud. React to what you hear before answering. " if voice else "Use short paragraphs; markdown bullets are fine; never print raw ids. ")
+           "Short spoken sentences, 2–4 per turn, conversational pauses, no lists, no markdown, never read ids aloud. React to what you hear before answering. " if voice else f"LANGUAGE: {lang_rule} Use short paragraphs; markdown bullets are fine; never print raw ids. ")
         + "FACTS: only state numbers and causes that come from the snapshot or tools — never invent. If asked something you cannot see, say so.\n"
         "FRESHNESS: the factory changes while you talk. The snapshot below is only the state when this conversation started. Before answering any question about how things are now "
         "(status, incidents, a machine, what to check), call get_factory_status first and speak from that result. An incident that has resolved is over — mention it once as resolved, then move on; "
@@ -203,6 +214,9 @@ def system_instruction(org_id: str, user_name: str, page: str | None, voice: boo
         "work orders (create, assign, move to in progress/done), acknowledge or resolve incidents, voice settings. When the user asks to change something, do it with the tool right away, "
         "then confirm in one sentence what changed (the page updates live and the edited item is spotlighted). Read back phone numbers and limits exactly. "
         "Only deleting a contact needs a spoken confirmation first. If a name is ambiguous, ask which one.\n"
+        "CALLS ON CRITICAL INCIDENTS: whenever you mention a critical or emergency incident, always say whom you called and how it went, using the person's name from the incident's `calls` "
+        "(e.g. 'I have placed a call to Prabal Verma; it's ringing' / 'Prabal Verma picked up and acknowledged' / 'the call to Prabal Verma went unanswered, so the countdown is running'). "
+        "If `calls` is empty and auto-dial is off, say 'I haven't called anyone yet — want me to call Prabal Verma?' and use place_call on a yes.\n"
         "SHUTDOWN: critical incidents run a countdown (default 5 minutes). If nobody acknowledges and no call is answered, Muse shuts the machine down automatically and says so. "
         "Mention the countdown when you report a critical incident ('three minutes left before I shut it down unless someone acknowledges'). You can cancel a countdown (cancel_shutdown), "
         "shut a machine down yourself when the user asks (shutdown_machine), and restart one after a check (restart_machine).\n"
@@ -217,7 +231,7 @@ def _client() -> genai.Client:
 
 
 # ---------------------------------------------------------------- text chat (SSE, streaming, tool loop)
-def chat_stream(org_id: str, user_name: str, history: list[dict[str, str]], page: str | None, user: dict[str, Any] | None = None) -> Iterator[dict[str, Any]]:
+def chat_stream(org_id: str, user_name: str, history: list[dict[str, str]], page: str | None, user: dict[str, Any] | None = None, lang: str = "en") -> Iterator[dict[str, Any]]:
     """Yields {"type":"delta","text"} | {"type":"navigate"|"edited",...} | {"type":"tool","name"} | {"type":"done"} | {"type":"error"}."""
     commands: list[dict[str, Any]] = []
     tools, impls = make_tools(org_id, commands.append, user)
@@ -227,7 +241,7 @@ def chat_stream(org_id: str, user_name: str, history: list[dict[str, str]], page
         return
     client = _client()
     contents = [types.Content(role="user" if h["role"] == "user" else "model", parts=[types.Part(text=h["text"])]) for h in history[-12:] if h.get("text")]
-    cfg = types.GenerateContentConfig(system_instruction=system_instruction(org_id, user_name, page, voice=False), tools=tools, temperature=0.4,
+    cfg = types.GenerateContentConfig(system_instruction=system_instruction(org_id, user_name, page, voice=False, lang=lang), tools=tools, temperature=0.4,
                                       automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True))
     try:
         for _round in range(4):
@@ -301,7 +315,7 @@ def greeting(org_id: str, user_name: str) -> dict[str, Any]:
 LIVE_INPUT_MIME = "audio/pcm;rate=16000"
 
 
-async def live_session(org_id: str, user_name: str, page: str | None, incoming: AsyncIterator[dict[str, Any]], send: Callable[[dict[str, Any]], Any], user: dict[str, Any] | None = None) -> None:
+async def live_session(org_id: str, user_name: str, page: str | None, incoming: AsyncIterator[dict[str, Any]], send: Callable[[dict[str, Any]], Any], user: dict[str, Any] | None = None, lang: str = "en") -> None:
     """Relay between a browser websocket and Gemini Live.
     incoming: async iterator of browser messages {type: audio|text|page|end, ...}
     send: coroutine function to push messages to the browser."""
@@ -311,7 +325,7 @@ async def live_session(org_id: str, user_name: str, page: str | None, incoming: 
     client = genai.Client(vertexai=True, project=settings.google_cloud_project or settings.gcp_project, location=settings.gemini_live_location)
     cfg = types.LiveConnectConfig(
         response_modalities=["AUDIO"],
-        system_instruction=system_instruction(org_id, user_name, page, voice=True),
+        system_instruction=system_instruction(org_id, user_name, page, voice=True, lang=lang),
         tools=tools,
         input_audio_transcription=types.AudioTranscriptionConfig(),
         output_audio_transcription=types.AudioTranscriptionConfig(),
@@ -364,8 +378,11 @@ async def live_session(org_id: str, user_name: str, page: str | None, incoming: 
                             note = f"Investigation finished for {mname}: likely cause {causes[0].get('name') if causes else 'unknown'}; first check: {checks[0].get('action') if checks else 'see dashboard'} (incident id {d.get('id')})."
                         else:
                             note = f"{'New' if d.get('escalation_level', 0) == 0 else 'Escalated'} {d.get('severity')} incident on {mname}: {d.get('title')} (incident id {d.get('id')}). Muse is investigating."
+                    elif kind == "voice_call" and d.get("status") in ("ringing", "dialing"):
+                        note = f"A call has just been placed to {d.get('contact_name') or d.get('to_number')} about '{d.get('title')}' — tell the user you have called {d.get('contact_name') or 'the contact'} and that you'll report how it goes."
                     elif kind == "voice_call" and d.get("status") in ("completed", "no_answer", "failed"):
-                        note = f"Phone call {d.get('status')}: {d.get('title')} to {d.get('contact_name') or d.get('to_number')}."
+                        g = d.get("outcome") or {}
+                        note = f"The call to {d.get('contact_name') or d.get('to_number')} {('was answered and ' + ('acknowledged' if str(g.get('acknowledged','')).lower()=='true' else 'not acknowledged')) if d.get('status')=='completed' else d.get('status')} ({d.get('title')})."
                     if not note:
                         continue
                     if time.time() - last_push < 8:

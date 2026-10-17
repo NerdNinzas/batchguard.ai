@@ -61,7 +61,7 @@ export function VoiceButton({ size = 112, frame = true, rings = true }: { size?:
 
 /** Square voice box: the round button inside a dark panel, with status + live transcript. */
 export function VoicePanel() {
-  const { voice, voiceError, captions, liveCaption, level, outLevel, stopVoice } = useMuse();
+  const { voice, voiceError, captions, liveCaption, level, outLevel, stopVoice, lang, setLang } = useMuse();
   const voiceOn = voice !== "off";
   const speaking = voice === "speaking";
   const last = liveCaption.muse || liveCaption.user || captions[captions.length - 1]?.text || "";
@@ -88,7 +88,9 @@ export function VoicePanel() {
           {voiceError ? <span className="text-red">{voiceError}</span> : voiceOn ? (last ? <>{liveCaption.muse ? "" : last && !liveCaption.user ? "" : ""}{last}{(liveCaption.muse || liveCaption.user) && <span className="ml-0.5 inline-block h-3 w-[2px] animate-pulse bg-white/80 align-middle" />}</> : "Listening… say how can I help") : "Tap to talk to Muse — ask how the factory is running, or say where you want to go."}
         </p>
         <div className="mt-2 flex items-center justify-between text-[10px] text-white/50">
-          <span>Gemini Live · Umbriel · Indian English / Hindi</span>
+          <span className="flex items-center gap-1">Gemini Live · Umbriel ·
+            {(["en", "hinglish", "hi"] as const).map((l) => <button key={l} onClick={() => setLang(l)} className={`rounded-full px-2 py-0.5 font-mono uppercase tracking-wider ${lang === l ? "bg-white/20 text-white" : "hover:text-white"}`}>{l === "en" ? "English" : l === "hi" ? "हिंदी" : "Hinglish"}</button>)}
+          </span>
           {voiceOn && <button onClick={stopVoice} className="inline-flex items-center gap-1 rounded-full bg-red/90 px-2.5 py-1 font-semibold text-white"><MicOff size={11} /> End</button>}
         </div>
       </div>
@@ -165,7 +167,7 @@ export function MuseVoiceFab() {
   const { voice } = useMuse();
   const on = voice !== "off";
   return (
-    <div className="fixed bottom-[92px] right-4 z-40">
+    <div data-tour="voice-fab" className="fixed bottom-[92px] right-4 z-40">
       <VoiceButton size={56} frame={false} rings={false} />
       {on && <span className="absolute -left-1 -top-1 h-3 w-3 rounded-full border-2 border-white bg-green" />}
     </div>

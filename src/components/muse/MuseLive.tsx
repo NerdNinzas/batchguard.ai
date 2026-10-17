@@ -36,6 +36,8 @@ type MuseCtx = {
   lastNav: NavCmd | null;
   editedTick: number;
   lastEdit: { what: string; label: string } | null;
+  lang: "en" | "hi" | "hinglish";
+  setLang: (l: "en" | "hi" | "hinglish") => void;
 };
 
 const Ctx = createContext<MuseCtx | null>(null);
@@ -86,6 +88,11 @@ export function MuseLiveProvider({ children }: { children: ReactNode }) {
   const [highlight, setHighlight] = useState<string | null>(null);
   const [lastNav, setLastNav] = useState<NavCmd | null>(null);
   const [editedTick, setEditedTick] = useState(0);
+  const [lang, setLangState] = useState<"en" | "hi" | "hinglish">("en");
+  useEffect(() => { try { const l = localStorage.getItem("muse.lang"); if (l === "hi" || l === "hinglish" || l === "en") setLangState(l); } catch {} }, []);
+  const setLang = useCallback((l: "en" | "hi" | "hinglish") => { setLangState(l); try { localStorage.setItem("muse.lang", l); } catch {} }, []);
+  const langRef = useRef(lang);
+  useEffect(() => { langRef.current = lang; }, [lang]);
   const [lastEdit, setLastEdit] = useState<{ what: string; label: string } | null>(null);
   const onEdited = useCallback((what: string, label: string) => { setLastEdit({ what, label }); setEditedTick((t) => t + 1); }, []);
   const hlTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -121,7 +128,7 @@ export function MuseLiveProvider({ children }: { children: ReactNode }) {
     setBusy(true);
     try {
       const token = await apiToken().catch(() => "");
-      const res = await fetch(token ? `${BACKEND_URL}/api/muse/chat` : "/api/muse/chat", { method: "POST", credentials: token ? "omit" : "include", headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body: JSON.stringify({ messages: history.map((m) => ({ role: m.role, text: m.text })), page: pathRef.current }) });
+      const res = await fetch(token ? `${BACKEND_URL}/api/muse/chat` : "/api/muse/chat", { method: "POST", credentials: token ? "omit" : "include", headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body: JSON.stringify({ messages: history.map((m) => ({ role: m.role, text: m.text })), page: pathRef.current, lang: langRef.current }) });
       if (!res.ok || !res.body) throw new Error(`Muse is unavailable (${res.status})`);
       const reader = res.body.getReader();
       const dec = new TextDecoder();
@@ -208,7 +215,7 @@ export function MuseLiveProvider({ children }: { children: ReactNode }) {
       await out.resume();
     } catch (e) { return fail(`Audio output failed: ${e instanceof Error ? e.message : String(e)}`); }
     // 4. websocket relay straight to the backend (Next rewrites don't carry websockets)
-    const url = `${WS_BASE}/api/muse/live?token=${encodeURIComponent(token)}&page=${encodeURIComponent(pathRef.current)}`;
+    const url = `${WS_BASE}/api/muse/live?token=${encodeURIComponent(token)}&page=${encodeURIComponent(pathRef.current)}&lang=${langRef.current}`;
     let ws: WebSocket;
     try {
       ws = new WebSocket(url);
@@ -311,8 +318,8 @@ export function MuseLiveProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => () => { wsRef.current?.close(); micStream.current?.getTracks().forEach((t) => t.stop()); }, []);
 
-  const value = useMemo<MuseCtx>(() => ({ messages, busy, send, reset, greeting, voice, voiceError, captions, liveCaption, level, outLevel, startVoice, stopVoice, goTo, highlight, lastNav, editedTick, lastEdit }),
-    [messages, busy, send, reset, greeting, voice, voiceError, captions, liveCaption, level, outLevel, startVoice, stopVoice, goTo, highlight, lastNav, editedTick, lastEdit]);
+  const value = useMemo<MuseCtx>(() => ({ messages, busy, send, reset, greeting, voice, voiceError, captions, liveCaption, level, outLevel, startVoice, stopVoice, goTo, highlight, lastNav, editedTick, lastEdit, lang, setLang }),
+    [messages, busy, send, reset, greeting, voice, voiceError, captions, liveCaption, level, outLevel, startVoice, stopVoice, goTo, highlight, lastNav, editedTick, lastEdit, lang, setLang]);
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 

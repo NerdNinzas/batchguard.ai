@@ -8,6 +8,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { MuseChip } from "@/components/muse/MuseChip";
+import { TourButton, TourProvider } from "@/components/app/Tour";
 import { MuseVoiceBar, MuseVoiceFab } from "@/components/muse/MuseConsole";
 import { MuseLiveProvider } from "@/components/muse/MuseLive";
 import { MuseLogo } from "@/components/muse/MuseLogo";
@@ -118,6 +119,7 @@ export function Shell({ children }: { children: ReactNode }) {
   return (
     <Ctx.Provider value={ctx}>
       <MuseLiveProvider>
+      <TourProvider>
       <div className="flex min-h-screen bg-bg">
         {/* sidebar */}
         <aside className={`fixed inset-y-0 left-0 z-40 flex w-64 flex-col overflow-y-auto border-r border-line bg-white transition-transform lg:sticky lg:top-0 lg:h-screen lg:translate-x-0 ${open ? "translate-x-0" : "-translate-x-full"}`}>
@@ -137,7 +139,7 @@ export function Shell({ children }: { children: ReactNode }) {
               const active = n.exact ? pathname === n.href : pathname.startsWith(n.href);
               const Icon = n.icon;
               return (
-                <Link key={n.href} href={n.href} onClick={() => setOpen(false)} className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition ${active ? "bg-blue text-white shadow-sm shadow-blue/25" : "text-muted hover:bg-sky-soft hover:text-ink"}`}>
+                <Link key={n.href} href={n.href} data-tour={`nav-${n.href}`} onClick={() => setOpen(false)} className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition ${active ? "bg-blue text-white shadow-sm shadow-blue/25" : "text-muted hover:bg-sky-soft hover:text-ink"}`}>
                   <Icon size={17} />
                   {n.label}
                 </Link>
@@ -164,6 +166,7 @@ export function Shell({ children }: { children: ReactNode }) {
               <p className="font-display text-xl font-semibold text-ink">{NAV.find((n) => (n.exact ? pathname === n.href : pathname.startsWith(n.href)))?.label ?? "BatchGuard"}</p>
             </div>
             <div className="flex items-center gap-2">
+              <TourButton />
               <div className="relative">
                 <button onClick={() => { setBell((b) => !b); if (!bell && unread) post("/api/notifications/read").then(() => setNotifs((s) => s.map((n) => ({ ...n, read: 1 })))); }} className="relative rounded-xl p-2 text-muted hover:bg-sky-soft hover:text-ink" aria-label="Notifications">
                   <Bell size={20} />
@@ -225,6 +228,7 @@ export function Shell({ children }: { children: ReactNode }) {
         {pathname !== "/app" && <MuseVoiceBar />}
         <MuseVoiceFab />
       </div>
+      </TourProvider>
       </MuseLiveProvider>
     </Ctx.Provider>
   );

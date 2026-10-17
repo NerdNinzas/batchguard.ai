@@ -21,6 +21,7 @@ router = APIRouter(prefix="/api/muse", tags=["muse"])
 class ChatIn(BaseModel):
     messages: list[dict[str, str]] = Field(default_factory=list)  # [{role: user|muse, text}]
     page: str | None = None
+    lang: str = "en"  # en | hi | hinglish
 
 
 @router.post("/chat")
@@ -31,7 +32,7 @@ async def chat(body: ChatIn, org: dict[str, Any] = Depends(current_org), user: d
 
     def worker() -> None:
         try:
-            for ev in muse_live.chat_stream(org["id"], user.get("name") or "", body.messages, body.page, user):
+            for ev in muse_live.chat_stream(org["id"], user.get("name") or "", body.messages, body.page, user, body.lang if body.lang in ("en", "hi", "hinglish") else "en"):
                 loop.call_soon_threadsafe(q.put_nowait, ev)
         except Exception as e:  # noqa: BLE001
             loop.call_soon_threadsafe(q.put_nowait, {"type": "error", "text": str(e)[:200]})
@@ -73,6 +74,9 @@ def live_token(org: dict[str, Any] = Depends(current_org), user: dict[str, Any] 
 async def live(ws: WebSocket):
     token = ws.query_params.get("token", "")
     page = ws.query_params.get("page")
+    lang = ws.query_params.get("lang", "en")
+    if lang not in ("en", "hi", "hinglish"):
+        lang = "en"
     try:
         data = jwt.decode(token, settings.auth_secret, algorithms=["HS256"])
         if data.get("scope") != "live":
@@ -101,7 +105,7 @@ async def live(ws: WebSocket):
             pass
 
     try:
-        await muse_live.live_session(data["org"], user.get("name") or "", page, incoming(), send, user)
+        await muse_live.live_session(data["org"], user.get("name") or "", page, incoming(), send, user, lang)
     except WebSocketDisconnect:
         pass
     except Exception as e:  # noqa: BLE001
