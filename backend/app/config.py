@@ -1,4 +1,5 @@
 import os
+import re
 from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -11,6 +12,7 @@ class Settings(BaseSettings):
 
     app_url: str = "http://localhost:3000"
     cors_origins: str = ""  # comma-separated extra browser origins (hosting URL etc.)
+    keepalive_urls: str = ""  # comma-separated URLs the backend pings every 30 s so the other Cloud Run services never go cold
     auth_secret: str = "dev-secret-change-me"
     database_path: str = "../data/batchguard.db"
     upload_dir: str = "../data/uploads"
@@ -62,6 +64,10 @@ class Settings(BaseSettings):
     def cors_origin_list(self) -> list[str]:
         base = [self.app_url, "http://localhost:3000", "http://localhost:3001"]
         return base + [o.strip() for o in self.cors_origins.split(",") if o.strip()]
+
+    @property
+    def keepalive_url_list(self) -> list[str]:
+        return [u.strip() for u in re.split(r"[;,\s]+", self.keepalive_urls) if u.strip()]
 
     @property
     def db_file(self) -> Path:

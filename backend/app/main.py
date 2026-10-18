@@ -15,6 +15,20 @@ from .routers import auth, device, incidents as incidents_router, machines, misc
 from .voice import calls as voice_calls
 
 
+def _keepalive() -> None:
+    """Ping the sibling services (dashboard, simulator) so their Cloud Run instances stay warm and CPU-hot.
+    Second layer next to Cloud Scheduler: this one fires every 30 s from the always-on backend."""
+    import urllib.request
+
+    for url in settings.keepalive_url_list:
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "batchguard-keepalive/1"})
+            with urllib.request.urlopen(req, timeout=15) as r:
+                r.read(1)
+        except Exception as e:  # noqa: BLE001
+            print(f"keepalive {url}: {e}")
+
+
 async def _sweeper() -> None:
     tick = 0
     while True:
@@ -25,6 +39,8 @@ async def _sweeper() -> None:
             await asyncio.to_thread(shutdown.sweep)
             if tick % 3 == 0:  # every 15 s: pull outcomes of voice calls still in flight
                 await asyncio.to_thread(voice_calls.poll_pending)
+            if tick % 6 == 0 and settings.keepalive_url_list:  # every 30 s
+                await asyncio.to_thread(_keepalive)
         except Exception as e:  # noqa: BLE001
             print("sweeper error:", e)
         tick += 1

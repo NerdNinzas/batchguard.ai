@@ -187,3 +187,19 @@ Blind evaluation: on Settings, record an injected fault, run `trigger_fault.py`,
 Kenney Factory Kit (CC0) · Poly Haven HDRIs and textures (CC0) · machine photos from Wikimedia Commons (see `public/machines/credits.json`) · Simple Icons.
 
 BatchGuard AI is advisory only. Recommendations are for qualified personnel following site safety and lockout procedures.
+
+## Keeping the demo warm (no cold starts)
+
+All three Cloud Run services (`batchguard-backend`, `batchguard-frontend`, `batchguard-simulator`) run with `--min-instances 1`, `--no-cpu-throttling` and `--cpu-boost`, so there is always a hot instance. On top of that:
+
+- **Cloud Scheduler** jobs `keepalive-*` ping each service and both Hosting sites every minute (`./deploy.sh keepalive` creates or updates them).
+- The always-on backend pings the dashboard and simulator every 30 s (`KEEPALIVE_URLS`, set in `deploy.sh`).
+
+When the demo is over, tear it down in this order:
+
+```bash
+./deploy.sh keepalive-off                                   # remove the scheduler jobs
+gcloud run services delete batchguard-simulator --region asia-southeast1
+gcloud run services delete batchguard-frontend  --region asia-southeast1
+gcloud run services delete batchguard-backend   --region asia-southeast1   # last: it snapshots SQLite to Cloud Storage on shutdown
+```

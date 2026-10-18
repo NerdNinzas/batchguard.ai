@@ -6,6 +6,9 @@ set -euo pipefail
 
 PROJECT="${GCP_PROJECT:-$(cat backend/.gcp-project 2>/dev/null || gcloud config get-value project)}"
 REGION="${GCP_REGION:-asia-southeast1}"
+# URLs the backend pings every 30 s so the dashboard and simulator instances stay warm (';'-separated: commas belong to gcloud).
+# Cloud Scheduler jobs (keepalive-*) ping the same targets every minute from outside — see ./deploy.sh keepalive.
+KEEPALIVE_URLS="${KEEPALIVE_URLS:-https://batchguard.web.app/login;https://batchguard-sim.web.app/;https://batchguard-frontend-6our3ivvha-as.a.run.app/login;https://batchguard-simulator-6our3ivvha-as.a.run.app/api/state}"
 REPO="$REGION-docker.pkg.dev/$PROJECT/batchguard"
 SA="batchguard-backend@$PROJECT.iam.gserviceaccount.com"
 WHAT="${1:-all}"
@@ -30,7 +33,7 @@ deploy_backend() {
     --service-account "$SA" --allow-unauthenticated --cpu 2 --memory 2Gi --min-instances 1 --max-instances 1 \
     --cpu-boost --no-cpu-throttling --timeout 3600 --concurrency 80 --port 8080 --session-affinity \
     --set-secrets "$SECRETS" \
-    --set-env-vars "APP_URL=${APP_URL:-https://batchguard.web.app},CORS_ORIGINS=${CORS_ORIGINS:-},GOOGLE_GENAI_USE_VERTEXAI=true,GOOGLE_CLOUD_PROJECT=$PROJECT,GOOGLE_CLOUD_LOCATION=global,GCP_PROJECT=$PROJECT,GCP_LOCATION=$REGION,GCS_BUCKET=$PROJECT-manuals,BIGQUERY_DATASET=batchguard,PUBSUB_TOPIC_TELEMETRY=telemetry,CLOUD_LOGGING=true,DEMO_MODE=true,DEMO_PRODUCER=false,STALE_AFTER_SECONDS=30,FIREBASE_PROJECT_ID=$PROJECT,DOGRAH_BASE_URL=$DOGRAH_BASE_URL,DOGRAH_TELEPHONY_CONFIG_ID=$DOGRAH_TELEPHONY_CONFIG_ID,DOGRAH_FROM_PHONE_NUMBER_ID=$DOGRAH_FROM_PHONE_NUMBER_ID,VOICE_AUTO_DIAL=false,DB_SNAPSHOT=true,RESEND_FROM=$RESEND_FROM" \
+    --set-env-vars "APP_URL=${APP_URL:-https://batchguard.web.app},KEEPALIVE_URLS=${KEEPALIVE_URLS},CORS_ORIGINS=${CORS_ORIGINS:-},GOOGLE_GENAI_USE_VERTEXAI=true,GOOGLE_CLOUD_PROJECT=$PROJECT,GOOGLE_CLOUD_LOCATION=global,GCP_PROJECT=$PROJECT,GCP_LOCATION=$REGION,GCS_BUCKET=$PROJECT-manuals,BIGQUERY_DATASET=batchguard,PUBSUB_TOPIC_TELEMETRY=telemetry,CLOUD_LOGGING=true,DEMO_MODE=true,DEMO_PRODUCER=false,STALE_AFTER_SECONDS=30,FIREBASE_PROJECT_ID=$PROJECT,DOGRAH_BASE_URL=$DOGRAH_BASE_URL,DOGRAH_TELEPHONY_CONFIG_ID=$DOGRAH_TELEPHONY_CONFIG_ID,DOGRAH_FROM_PHONE_NUMBER_ID=$DOGRAH_FROM_PHONE_NUMBER_ID,VOICE_AUTO_DIAL=false,DB_SNAPSHOT=true,RESEND_FROM=$RESEND_FROM" \
     --quiet
   BACKEND_URL=$(gcloud run services describe batchguard-backend --region "$REGION" --format 'value(status.url)')
   echo "✓ backend: $BACKEND_URL"
@@ -43,9 +46,9 @@ deploy_frontend() {
   # public URL = Firebase Hosting site in front of Cloud Run (firebase.json); falls back to the Cloud Run URL
   APP_URL="${APP_URL:-https://batchguard.web.app}"
   gcloud builds submit . --config cloudbuild.frontend.yaml --substitutions "_IMAGE=$REPO/frontend:latest,_APP_URL=$APP_URL,_BACKEND_URL=$BACKEND_URL" --quiet
-  echo "▶ deploying frontend (scale-to-zero)"
+  echo "▶ deploying frontend (always-on instance, CPU never throttled: no cold starts)"
   gcloud run deploy batchguard-frontend --image "$REPO/frontend:latest" --region "$REGION" \
-    --allow-unauthenticated --cpu 1 --memory 1Gi --min-instances 1 --max-instances 3 --port 8080 \
+    --allow-unauthenticated --cpu 1 --memory 1Gi --min-instances 1 --max-instances 3 --port 8080 --no-cpu-throttling --cpu-boost \
     --set-env-vars "BACKEND_URL=$BACKEND_URL" --quiet
   FRONTEND_URL=$(gcloud run services describe batchguard-frontend --region "$REGION" --format 'value(status.url)')
   echo "✓ frontend: $FRONTEND_URL"
