@@ -61,3 +61,7 @@ backend/secrets/
 !/simulator/.env.example
 /simulator/*.tsbuildinfo
 /simulator/next-env.d.ts
+
+# submission media (large renders and raw audio stay out of the repo)
+/submission/video/
+/submission/voiceover/**/*.wav
