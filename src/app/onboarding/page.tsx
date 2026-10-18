@@ -24,7 +24,7 @@ const STEPS = ["Organisation", "Use cases", "Escalation contacts", "Done"];
 const LINES = [
   "First, tell me about your factory. The owner's phone is what I call when something is critical.",
   "What do you want me to watch for? Pick everything that applies — it tunes what I prioritise.",
-  "Who should I reach, and in which order? If the first person doesn't acknowledge in 2 minutes, I move to the next.",
+  "Who should I reach, and in which order? If the first person doesn't answer or acknowledge, I call the next, once each.",
   "That's it! You're registered. Next, let's onboard your first machine from its manual.",
 ];
 
@@ -163,7 +163,7 @@ export default function OnboardingPage() {
             <Button type="button" variant="secondary" size="sm" onClick={() => setContacts((s) => [...s, { name: "", role: "", phone: "", email: "", escalation_order: s.length + 1 }])}>
               <Plus size={14} /> Add next contact
             </Button>
-            <p className="text-xs text-muted">Order matters: contact 1 is called first. Unacknowledged critical incidents move down the list every 2 minutes.</p>
+            <p className="text-xs text-muted">Order matters: contact 1 is called first. Each contact gets one call; no answer or no acknowledgement moves to the next.</p>
           </div>
         )}
 

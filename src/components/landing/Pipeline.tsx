@@ -226,7 +226,7 @@ export function Pipeline() {
             ["No LLM on the hot path", "Detection is deterministic and runs on every reading. Gemini is invoked only when an incident opens."],
             ["One fault, one incident", "Cooldown and grouping attach new symptoms to the open incident instead of spawning alerts."],
             ["Evidence from four sources", "History, the machine's own manual, its neighbours, and signal correlations — all cited in the report."],
-            ["Escalation that climbs", "Unacknowledged critical → next contact in order, until a human presses 1."],
+            ["Escalation that climbs", "Unacknowledged critical → one call to each contact in order, then the auto-shutdown countdown."],
           ].map(([t, b]) => (
             <div key={t} className="rounded-xl border border-line bg-white p-4">
               <p className="font-display text-lg font-semibold text-ink">{t}</p>

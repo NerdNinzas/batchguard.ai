@@ -156,7 +156,7 @@ export const SEVERITY = [
   { level: "Info", trigger: "Single anomaly, inside limits", action: "Dashboard only", color: "blue" },
   { level: "Warning", trigger: "Warning limit crossed, or time-to-limit < 10 min", action: "Dashboard + email", color: "amber" },
   { level: "Critical", trigger: "Critical limit crossed, or several parameters in warning", action: "Dashboard + email + voice call", color: "red" },
-  { level: "Emergency", trigger: "Critical not acknowledged in 2 min, or a safety event", action: "Call next contact; repeat until acknowledged", color: "red" },
+  { level: "Emergency", trigger: "Critical not acknowledged in 2 min, or a safety event", action: "One call to the next contact; ladder exhausted → auto-shutdown countdown", color: "red" },
 ];
 
 export const MACHINES = [

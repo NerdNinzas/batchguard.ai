@@ -150,7 +150,7 @@ def incident_opened(inc: dict[str, Any], m: dict[str, Any], contact: dict[str, A
         + _h("What tripped")
         + _list(_sig_lines(inc) or ["See the dashboard for the signal detail."])
         + _button("Acknowledge on the dashboard", _inc_link(inc), accent)
-        + _p("If nobody acknowledges within two minutes I move to the next contact on the ladder" + (" and ring them." if sev in ("critical", "emergency") else "."), muted=True)
+        + _p("This is the only email for this incident. " + ("If nobody acknowledges, I call each contact on the ladder once, then the auto-shutdown countdown decides." if sev in ("critical", "emergency") else "Follow it on the dashboard."), muted=True)
     )
     return subject, layout(f"{m.get('name')} needs attention", f"{sev} incident", body, accent)
 
@@ -267,7 +267,7 @@ def test_email(user: dict[str, Any]) -> tuple[str, str]:
     body = (
         _p(f"Hi {_e(user.get('name') or 'there')}, this is a test from your BatchGuard workspace. If you can read this, Resend is wired up and every alert below will arrive looking like this.")
         + _h("Templates in use")
-        + _list(["Incident opened (warning / critical)", "Escalation to the next contact", "Muse's investigation report", "Incident resolved", "Voice call summary", "Daily digest", "Welcome"])
+        + _list(["Incident opened — the one email per incident (warning / critical)", "Welcome", "Daily digest (on request)", "Previews of escalation, report, resolution, call summary and shutdown templates"])
         + _button("Open settings", f"{settings.app_url}/app/settings")
     )
     return "[BatchGuard] Test email — Muse says hello", layout("Email is working", "test", body)

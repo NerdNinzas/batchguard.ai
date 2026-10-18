@@ -33,7 +33,7 @@ export default function ContactsPage() {
 
   return (
     <div className="space-y-5">
-      <Spot k="ladder"><Card title="Escalation ladder" action={<span className="text-xs text-muted">Warning → email #1 · Critical → email + call #1 · no ack in 2 min → next contact, repeat</span>}>
+      <Spot k="ladder"><Card title="Escalation ladder" action={<span className="text-xs text-muted">One email per incident (to #1) · Critical → one call to #1 · no answer or no ack → one call to the next · ladder done → auto-shutdown decides</span>}>
         <div className="space-y-3">
           {items.map((c) => (
             <Spot key={c.id} k={c.id} className="rounded-xl"><div className="grid gap-2 rounded-xl border border-line bg-white p-3 sm:grid-cols-[auto_1fr_1fr_1fr_1fr_auto_auto_auto] sm:items-end">

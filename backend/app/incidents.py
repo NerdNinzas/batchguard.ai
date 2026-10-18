@@ -177,19 +177,45 @@ def resolve(incident_id: str, feedback: dict[str, Any] | None, reason: str | Non
 
 
 def escalation_sweep() -> None:
-    """Critical + unacknowledged for ESCALATION_TIMEOUT → emergency, next contact. Repeats until acknowledged."""
+    """Critical/emergency incident, not acknowledged → one call per contact, down the ladder, never a retry.
+    The next contact is dialled as soon as the previous call ended without an acknowledgement (no answer, hung up,
+    or talked but did not acknowledge), or after ESCALATION_TIMEOUT if no call could be placed. When the ladder is
+    exhausted nothing more is dialled: the auto-shutdown countdown decides."""
     t = now()
     due = rows(
         conn()
         .execute(
-            "SELECT * FROM incidents WHERE status='open' AND severity IN ('critical','emergency') "
-            "AND COALESCE(last_escalated_at, opened_at) < ?",
-            (t - settings.escalation_timeout_seconds,),
+            "SELECT * FROM incidents WHERE status='open' AND severity IN ('critical','emergency') AND ladder_done_at IS NULL"
         )
         .fetchall()
     )
+    terminal = ("completed", "failed", "no_answer")
     for inc in due:
+        contacts = notify._contacts(inc["org_id"])
+        since_ts = inc["last_escalated_at"] or inc["opened_at"]
+        last_call = row(conn().execute(
+            "SELECT * FROM voice_calls WHERE incident_id=? AND created_at>=? ORDER BY created_at DESC LIMIT 1", (inc["id"], since_ts - 5)
+        ).fetchone())
+        waited = t - since_ts
+        if last_call and last_call["status"] in terminal:
+            ready = True  # the call for this rung is over and nobody acknowledged (an acknowledgement would have closed this path)
+        elif last_call:
+            ready = waited >= 600  # still ringing / talking: wait for it, with a safety valve
+        else:
+            ready = waited >= settings.escalation_timeout_seconds
+        if not ready:
+            continue
         level = inc["escalation_level"] + 1
+        if level >= len(contacts):
+            m = _machine(inc["machine_id"])
+            with tx() as c:
+                c.execute("UPDATE incidents SET ladder_done_at=?, last_escalated_at=? WHERE id=?", (t, t, inc["id"]))
+            tail = ("waiting for the auto-shutdown countdown" if inc.get("shutdown_state") in ("pending", "warned")
+                    else "auto-shutdown is off, so the machine keeps running until someone acts")
+            notify.record(inc["org_id"], inc["id"], "in_app", None, f"Nobody acknowledged: {m.get('name')}",
+                          f"Every contact on the ladder was called once without an acknowledgement — {tail}", "delivered")
+            bus.publish(inc["org_id"], "incident", {**row(conn().execute("SELECT * FROM incidents WHERE id=?", (inc["id"],)).fetchone()), "signals": uj(inc["signals"], [])})
+            continue
         with tx() as c:
             c.execute(
                 "UPDATE incidents SET severity='emergency', escalation_level=?, last_escalated_at=? WHERE id=?",

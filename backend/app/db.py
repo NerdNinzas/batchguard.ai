@@ -165,7 +165,7 @@ def init_db() -> None:
         c.execute("ALTER TABLE incidents ADD COLUMN last_abnormal_at REAL")
     if "resolved_reason" not in icols:
         c.execute("ALTER TABLE incidents ADD COLUMN resolved_reason TEXT")
-    for col, ddl in (("shutdown_at", "REAL"), ("shutdown_state", "TEXT")):
+    for col, ddl in (("shutdown_at", "REAL"), ("shutdown_state", "TEXT"), ("ladder_done_at", "REAL")):
         if col not in icols:
             c.execute(f"ALTER TABLE incidents ADD COLUMN {col} {ddl}")
     vcols = {r["name"] for r in c.execute("PRAGMA table_info(voice_settings)").fetchall()}

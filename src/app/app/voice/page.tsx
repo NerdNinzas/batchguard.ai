@@ -448,7 +448,7 @@ export default function VoicePage() {
         <div className="space-y-5">
           <Spot k="auto-dial"><Card title={<span className="flex items-center gap-2"><Siren size={18} className="text-red" /> Automatic escalation calls</span>}>
             <div className="flex items-start justify-between gap-4">
-              <p className="text-sm text-muted">Critical → call contact #1 with the brief. No acknowledgement in {2} min → emergency, call the next contact, repeat. An acknowledgement spoken on the call acknowledges the incident.</p>
+              <p className="text-sm text-muted">Critical → one call to contact #1 with the brief. No answer, hung up, or no acknowledgement → emergency, one call to the next contact. Never a retry. When the ladder is exhausted, the auto-shutdown countdown decides. An acknowledgement spoken on the call acknowledges the incident.</p>
               <button onClick={toggleAuto} role="switch" aria-checked={!!status.settings.auto_dial} className={`relative h-7 w-12 shrink-0 rounded-full transition ${status.settings.auto_dial ? "bg-red" : "bg-line"}`}>
                 <span className={`absolute top-0.5 h-6 w-6 rounded-full bg-white shadow transition ${status.settings.auto_dial ? "left-[22px]" : "left-0.5"}`} />
               </button>

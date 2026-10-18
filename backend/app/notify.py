@@ -9,10 +9,15 @@ from .ids import new_id, now
 
 ACTION = {
     "info": "Dashboard only",
-    "warning": "Dashboard + email to primary contact",
-    "critical": "Dashboard + email + voice call to primary contact",
-    "emergency": "Call next contact in order; repeat until acknowledged",
+    "warning": "Dashboard + one incident email to the first contact on the ladder",
+    "critical": "Dashboard + the one incident email + one call to contact #1",
+    "emergency": "One call to the next contact; when the ladder is exhausted, the auto-shutdown countdown decides",
 }
+
+# Anti-spam rules (real-life testing showed every report/escalation/resolution mail landing in the same inbox):
+#   - exactly ONE email per incident: the incident email, sent when it opens, to the first ladder contact with an address
+#   - exactly ONE call per contact per incident: no answer / hung up / no acknowledgement → next contact, never a retry
+#   - everything else is recorded in-app only
 
 
 def _contacts(org_id: str) -> list[dict[str, Any]]:
@@ -69,12 +74,25 @@ def record(org_id: str, incident_id: str | None, channel: str, contact: dict[str
     return _record(org_id, incident_id, channel, contact, subject, body, status)
 
 
+def _email_already_sent(incident_id: str) -> bool:
+    r = conn().execute(
+        "SELECT 1 FROM notifications WHERE incident_id=? AND channel='email' AND (status LIKE 'sent%' OR status='simulated') LIMIT 1",
+        (incident_id,),
+    ).fetchone()
+    return r is not None
+
+
+def _already_called(incident_id: str, contact: dict[str, Any]) -> bool:
+    if not contact.get("id"):
+        return False
+    r = conn().execute("SELECT 1 FROM voice_calls WHERE incident_id=? AND contact_id=? LIMIT 1", (incident_id, contact["id"])).fetchone()
+    return r is not None
+
+
 def on_shutdown(inc: dict[str, Any], m: dict[str, Any], reason: str) -> None:
     org_id = inc["org_id"]
     _record(org_id, inc["id"], "in_app", None, f"Emergency shutdown: {m.get('name')}", reason, "delivered")
-    for ct in email_recipients(org_id, limit=3):
-        subj, html_body = mail.shutdown(inc, m, reason, ct)
-        _record(org_id, inc["id"], "email", ct, subj, reason, send_email(ct["email"], subj, html_body))
+    # no email: the one incident email already went out when the incident opened
 
 
 def send_email(to_addr: str, subject: str, html_body: str) -> str:
@@ -104,8 +122,8 @@ def on_incident_opened(inc: dict[str, Any], m: dict[str, Any]) -> None:
     subject, body = _incident_text(inc, m)
     _record(org_id, inc["id"], "in_app", None, subject, inc["title"], "delivered")
     sev = inc["severity"]
-    if sev in ("warning", "critical", "emergency"):
-        targets = email_recipients(org_id)
+    if sev in ("warning", "critical", "emergency") and not _email_already_sent(inc["id"]):
+        targets = email_recipients(org_id)[:1]  # the ONE email per incident: first ladder contact with an address (else the owner)
         for ct in targets:
             subj, html_body = mail.incident_opened(inc, m, ct)
             _record(org_id, inc["id"], "email", ct, subj, body, send_email(ct["email"], subj, html_body))
@@ -123,9 +141,11 @@ def on_incident_escalated(inc: dict[str, Any], m: dict[str, Any], level: int = 0
     contacts = _contacts(org_id)
     target = contacts[min(level, len(contacts) - 1)] if contacts else None
     _record(org_id, inc["id"], "in_app", None, subject, f"Escalated to {inc['severity']}: {inc['title']}", "delivered")
-    for ct in email_recipients(org_id, level=min(level, max(len(contacts) - 1, 0))):
-        subj, html_body = mail.incident_escalated(inc, m, ct, level)
-        _record(org_id, inc["id"], "email", ct, subj, body, send_email(ct["email"], subj, html_body))
+    if level == 0 and not _email_already_sent(inc["id"]):
+        # a warning that grew into a critical never had its email yet (warning mails go out too, so this is rare)
+        for ct in email_recipients(org_id)[:1]:
+            subj, html_body = mail.incident_escalated(inc, m, ct, level)
+            _record(org_id, inc["id"], "email", ct, subj, body, send_email(ct["email"], subj, html_body))
     if inc["severity"] in ("critical", "emergency"):
         _voice(org_id, inc, m, target, level=level)
 
@@ -142,6 +162,9 @@ def _voice(org_id: str, inc: dict[str, Any], m: dict[str, Any], contact: dict[st
     if not contact or not contact.get("phone"):
         _record(org_id, inc["id"], "voice", contact, subject, "No phone number on the contact", "skipped")
         return
+    if _already_called(inc["id"], contact):
+        _record(org_id, inc["id"], "voice", contact, subject, f"{contact['name']} was already called once for this incident — no retry, moving down the ladder", "skipped")
+        return
     queued = calls.auto_dial(inc, m, contact, level=level)
     if queued:
         _record(org_id, inc["id"], "voice", contact, subject, f"Muse is calling {contact['name']} ({queued['call_type']}) via TeleCMI · Gemini Live", "dialing")
@@ -153,9 +176,8 @@ def on_report_ready(inc: dict[str, Any], m: dict[str, Any], report: dict[str, An
     """Muse finished investigating: mail the evidence-backed report to the primary contact (warning and above)."""
     if inc.get("severity") not in ("warning", "critical", "emergency"):
         return
-    for ct in email_recipients(inc["org_id"]):
-        subj, html_body = mail.report_ready(inc, m, report, ct)
-        _record(inc["org_id"], inc["id"], "email", ct, subj, (report.get("summary") or "")[:300], send_email(ct["email"], subj, html_body))
+    # in-app only (one email per incident); the report is on the incident page and in the call brief
+    _record(inc["org_id"], inc["id"], "in_app", None, f"Muse's report is ready: {m.get('name')}", (report.get("summary") or "")[:300], "delivered")
 
 
 def on_incident_resolved(inc: dict[str, Any], m: dict[str, Any], feedback: dict[str, Any] | None) -> None:
@@ -165,10 +187,7 @@ def on_incident_resolved(inc: dict[str, Any], m: dict[str, Any], feedback: dict[
     body = (f"{m.get('name')} is sending telemetry again" if back_online else
             f"{inc['title']} — parameters returned to normal; incident closed automatically" if auto else ((feedback or {}).get("actual_cause") or "closed"))
     _record(inc["org_id"], inc["id"], "in_app", None, subj, body, "delivered")
-    if not auto:
-        for ct in email_recipients(inc["org_id"]):
-            subj, html_body = mail.incident_resolved(inc, m, feedback)
-            _record(inc["org_id"], inc["id"], "email", ct, subj, "resolved", send_email(ct["email"], subj, html_body))
+    # no email on resolution: one email per incident
 
 
 def on_welcome(org: dict[str, Any], user: dict[str, Any]) -> None:
@@ -178,9 +197,11 @@ def on_welcome(org: dict[str, Any], user: dict[str, Any]) -> None:
 
 
 def on_voice_call_completed(call: dict[str, Any], transcript_lines: list[dict[str, str]], outcome: dict[str, Any]) -> None:
-    for ct in email_recipients(call["org_id"]):
-        subj, html_body = mail.voice_summary(call, transcript_lines, outcome, ct)
-        _record(call["org_id"], call.get("incident_id"), "email", ct, subj, f"call summary {call['id']}", send_email(ct["email"], subj, html_body))
+    # in-app only (one email per incident); the transcript and outcome live on the Voice AI page
+    who = call.get("contact_name") or call.get("to_number")
+    ack = outcome.get("acknowledged") in (True, "true", "yes", "1")
+    _record(call["org_id"], call.get("incident_id"), "in_app", None, f"Call to {who}: {'acknowledged' if ack else call.get('status', 'ended')}",
+            f"call summary {call['id']}", "delivered")
 
 
 def daily_digest_text(org_id: str) -> str:
