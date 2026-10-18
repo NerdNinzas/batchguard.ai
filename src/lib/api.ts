@@ -38,13 +38,21 @@ export async function api<T = unknown>(path: string, init: RequestInit & { json?
   // directly with a bearer token, which removes two network hops behind Firebase Hosting.
   const useDirect = !path.startsWith("/api/auth/") && !(rest.body instanceof FormData);
   const token = useDirect ? await directToken() : null;
-  const url = token ? `${BACKEND_URL}${path}` : path;
-  const res = await fetch(url, {
-    credentials: token ? "omit" : "include",
-    ...rest,
-    headers: { ...(json !== undefined ? { "Content-Type": "application/json" } : {}), ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(headers || {}) },
-    body: json !== undefined ? JSON.stringify(json) : rest.body,
-  });
+  const body = json !== undefined ? JSON.stringify(json) : rest.body;
+  const baseHeaders = { ...(json !== undefined ? { "Content-Type": "application/json" } : {}), ...(headers || {}) };
+  let res: Response;
+  try {
+    res = await fetch(token ? `${BACKEND_URL}${path}` : path, {
+      credentials: token ? "omit" : "include",
+      ...rest,
+      headers: { ...baseHeaders, ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      body,
+    });
+  } catch (err) {
+    // The direct call never reached the backend (CORS, DNS, network). Fall back to the same-origin proxy with the cookie.
+    if (!token) throw err;
+    res = await fetch(path, { credentials: "include", ...rest, headers: baseHeaders, body });
+  }
   if (!res.ok) {
     if (res.status === 401 && token) _direct = null;
     let msg = res.statusText;

@@ -4,7 +4,7 @@ Factory monitoring with an investigating AI agent. Onboard a machine from its PD
 
 Built for the **Google Cloud AI Builder Cup 2026 · Manufacturing** theme on Google ADK, Gemini 2.5, Gemini Live, Cloud Run, Firestore, Pub/Sub, BigQuery and Cloud Storage.
 
-- **Live demo:** https://batchguard.web.app — sign in with `demo@batchguard.ai` / `demo1234`
+- **Live demo:** https://batchguardai.live (also https://batchguard.web.app) — sign in with `demo@batchguard.ai` / `demo1234`
 - **The idea and the problem:** [IDEA.md](IDEA.md)
 - **How it is built, end to end:** [SOLUTION.md](SOLUTION.md)
 
@@ -134,7 +134,7 @@ The voice websocket connects straight to the backend origin, so the browser must
 
 ## Virtual factory simulator
 
-A separate app (`simulator/`, its own Cloud Run service and Hosting site: **https://batchguard-sim.web.app**) that behaves like a real plant's PLC gateway for the demo account. It signs in as the demo owner, obtains a device key per machine, and streams telemetry to `POST /v1/telemetry` every second, exactly like a device would. The 3D factory on the page is the simulated plant; the control panel lets you:
+A separate app (`simulator/`, its own Cloud Run service and Hosting site: **https://sim.batchguardai.live**, also https://batchguard-sim.web.app) that behaves like a real plant's PLC gateway for the demo account. It signs in as the demo owner, obtains a device key per machine, and streams telemetry to `POST /v1/telemetry` every second, exactly like a device would. The 3D factory on the page is the simulated plant; the control panel lets you:
 
 - drag any parameter to a target value over a chosen ramp time (temperature, vibration, pressure, flow…),
 - inject fault presets (bearing wear, overload, belt slip, pressure drop, cavitation, seal overheat, feed starvation, reject spike, slow drift),

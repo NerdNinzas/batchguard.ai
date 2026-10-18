@@ -4,7 +4,7 @@ steps:
 images: ["${_IMAGE}"]
 substitutions:
   _IMAGE: ""
-  _DASHBOARD_URL: "https://batchguard.web.app"
+  _DASHBOARD_URL: "https://batchguardai.live"
 options:
   logging: CLOUD_LOGGING_ONLY
   machineType: E2_HIGHCPU_8
