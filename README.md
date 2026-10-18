@@ -24,11 +24,13 @@ Built for the **Google Cloud AI Builder Cup 2026 · Manufacturing** theme.
 
 ### Hands-off daily update: the owner asks Muse, Muse does the rest
 
-Nobody clicks through pages. The owner taps the round voice button, asks "how is my factory running?", and Muse answers from live data, takes them to the incident, highlights the chart, and tells them whom it already called. Click the preview to watch the full 44-second video.
+Nobody clicks through pages. The owner taps the round voice button, asks "how is my factory running?", and Muse answers from live data, takes them to the incident, highlights the chart, and tells them whom it already called.
 
-[![Hands-off daily update with Muse (preview)](public/screenshots/handsfree-preview.gif)](public/screenshots/handsfree.mp4)
+The animation below is a silent preview. **Click it to play the full 44-second video with Muse's voice.**
 
-▶ **Full video:** [handsfree.mp4](public/screenshots/handsfree.mp4)
+[![Hands-off daily update with Muse (silent preview, click for the video with sound)](public/screenshots/handsfree-preview.gif)](https://batchguardai.live/screenshots/handsfree.mp4)
+
+▶ **Watch with sound:** [on the live site](https://batchguardai.live/screenshots/handsfree.mp4) · [in this repo](public/screenshots/handsfree.mp4) (GitHub opens a player; press play and make sure it is not muted)
 
 ### The live 3D factory
 
