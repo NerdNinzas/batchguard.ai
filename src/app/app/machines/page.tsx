@@ -3,7 +3,7 @@
 
 import { ArrowRight, Plus } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useApp } from "@/components/app/Shell";
 import { useHighlight } from "@/components/muse/MuseLive";
 import { HealthRing } from "@/components/app/charts";
@@ -17,13 +17,15 @@ export default function MachinesPage() {
   const { subscribe } = useApp();
   const [machines, setMachines] = useState<Machine[] | null>(() => cached<Machine[]>("/api/machines"));
   const load = () => get<Machine[]>("/api/machines").then(setMachines).catch(() => {});
+  const pending = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     load();
+    return () => { if (pending.current) clearTimeout(pending.current); };
   }, []);
   useEffect(
     () =>
       subscribe((e) => {
-        if (e.type === "machine") load();
+        if (e.type === "machine") { if (!pending.current) pending.current = setTimeout(() => { pending.current = null; load(); }, 800); }
         if (e.type === "telemetry")
           setMachines((ms) => ms?.map((m) => (m.id === e.data.machine_id ? { ...m, latest: { ...m.latest, ...(e.data.latest as Machine["latest"]) }, last_seen: Number(e.data.ts) } : m)) ?? ms);
       }),

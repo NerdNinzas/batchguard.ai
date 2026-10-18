@@ -4,7 +4,7 @@
 import { motion } from "framer-motion";
 import { Activity, ArrowRight, Bot, CheckCircle2, Clock, Cpu, PhoneCall, Power, ShieldAlert, ShieldCheck, Siren, Users, Zap } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { LazySection } from "@/components/app/LazySection";
 import { useApp } from "@/components/app/Shell";
 import { MuseConsole } from "@/components/muse/MuseConsole";
@@ -46,15 +46,17 @@ export default function OverviewPage() {
         setSparks(Object.fromEntries(Object.entries(o.sparks).map(([k, v]) => [k, v.points])));
       })
       .catch(() => {});
+  // coalesce event-driven reloads: a burst of machine/incident events becomes one request
+  const pending = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     load();
     const id = setInterval(load, 15000);
-    return () => clearInterval(id);
+    return () => { clearInterval(id); if (pending.current) clearTimeout(pending.current); };
   }, []);
   useEffect(
     () =>
       subscribe((e) => {
-        if (e.type === "machine" || e.type === "incident") load();
+        if (e.type === "machine" || e.type === "incident") { if (!pending.current) pending.current = setTimeout(() => { pending.current = null; load(); }, 800); }
         if (e.type === "telemetry" && d) {
           const mid = String(e.data.machine_id);
           const sp = d.sparks[mid];

@@ -47,10 +47,13 @@ def _update_machine_status(machine_id: str) -> None:
     status = m["status"]
     if status not in ("offline", "stale"):
         status = "critical" if "critical" in states else "warning" if "warning" in states else "normal"
+    health = health_score(machine_id)
+    if status == m["status"] and health == (m.get("health") if m.get("health") is not None else -1):
+        return  # nothing changed: no write, no live event, no mirror (this runs on every telemetry post)
     with tx() as c:
-        c.execute("UPDATE machines SET status=?, health=? WHERE id=?", (status, health_score(machine_id), machine_id))
-    bus.publish(m["org_id"], "machine", {"id": machine_id, "status": status, "health": health_score(machine_id)})
-    cloud.mirror("machines", machine_id, {"status": status, "health": health_score(machine_id), "org_id": m["org_id"]})
+        c.execute("UPDATE machines SET status=?, health=? WHERE id=?", (status, health, machine_id))
+    bus.publish(m["org_id"], "machine", {"id": machine_id, "status": status, "health": health})
+    cloud.mirror("machines", machine_id, {"status": status, "health": health, "org_id": m["org_id"]})
 
 
 def handle_signals(machine_id: str, signals: list[Signal]) -> None:
