@@ -1,5 +1,6 @@
 import { Navbar } from "@/components/landing/Navbar";
 import { Hero } from "@/components/landing/Hero";
+import { DemoVideo } from "@/components/landing/DemoVideo";
 import { Marquee } from "@/components/landing/Marquee";
 import { Story } from "@/components/landing/Story";
 import { Problem } from "@/components/landing/Problem";
@@ -18,6 +19,7 @@ export default function Home() {
     <main className="relative">
       <Navbar />
       <Hero />
+      <DemoVideo />
       <Marquee />
       <Story />
       <Problem />

@@ -1,14 +1,13 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import {
-  Activity, Bell, BookOpenCheck, Boxes, ChevronDown, Cpu, LayoutDashboard, LogOut, Menu, PhoneCall, Radio, Settings, Siren, Users, Workflow, X,
-} from "lucide-react";
+import { Activity, Bell, BookOpenCheck, Boxes, ChevronDown, Cpu, ExternalLink, Factory, LayoutDashboard, LogOut, Menu, PhoneCall, Radio, Settings, Siren, Users, Workflow, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { MuseChip } from "@/components/muse/MuseChip";
 import { TourButton, TourProvider } from "@/components/app/Tour";
+import { DEMO_EMAIL, SIM_URL } from "@/lib/demo";
 import { MuseVoiceBar, MuseVoiceFab } from "@/components/muse/MuseConsole";
 import { MuseLiveProvider } from "@/components/muse/MuseLive";
 import { MuseLogo } from "@/components/muse/MuseLogo";
@@ -166,6 +165,11 @@ export function Shell({ children }: { children: ReactNode }) {
               <p className="font-display text-xl font-semibold text-ink">{NAV.find((n) => (n.exact ? pathname === n.href : pathname.startsWith(n.href)))?.label ?? "BatchGuard"}</p>
             </div>
             <div className="flex items-center gap-2">
+              {(user?.email === DEMO_EMAIL || /demo/i.test(user?.org?.name ?? "")) && (
+                <a href={SIM_URL} target="_blank" rel="noopener noreferrer" data-tour="sim-link" title="Open the virtual factory that feeds this demo (new tab)" className="inline-flex items-center gap-1.5 rounded-xl border border-line bg-white px-3 py-1.5 text-xs font-semibold text-ink transition hover:border-blue/50 hover:text-blue">
+                  <Factory size={14} className="text-blue" /> <span className="hidden sm:inline">Virtual factory</span> <ExternalLink size={11} className="text-muted" />
+                </a>
+              )}
               <TourButton />
               <div className="relative">
                 <button onClick={() => { setBell((b) => !b); if (!bell && unread) post("/api/notifications/read").then(() => setNotifs((s) => s.map((n) => ({ ...n, read: 1 })))); }} className="relative rounded-xl p-2 text-muted hover:bg-sky-soft hover:text-ink" aria-label="Notifications">

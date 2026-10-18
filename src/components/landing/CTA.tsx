@@ -1,7 +1,8 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { ArrowRight, Code2, PlayCircle } from "lucide-react";
+import { ArrowRight, PlayCircle } from "lucide-react";
+import { DEMO_VIDEO_URL } from "@/lib/demo";
 import { Reveal } from "@/components/ui/Reveal";
 
 const ParticleField = dynamic(() => import("@/components/three/ParticleField"), { ssr: false });
@@ -25,11 +26,8 @@ export function CTA() {
             <a href="#story" className="group inline-flex items-center gap-2 rounded-xl bg-blue px-6 py-3.5 font-semibold text-white transition hover:brightness-110">
               Replay the incident <ArrowRight size={18} className="transition group-hover:translate-x-0.5" />
             </a>
-            <a href="#" className="inline-flex items-center gap-2 rounded-xl border border-line bg-white px-6 py-3.5 text-fg transition hover:border-blue/50 hover:text-blue">
+            <a href={DEMO_VIDEO_URL} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 rounded-xl border border-line bg-white px-6 py-3.5 text-fg transition hover:border-blue/50 hover:text-blue">
               <PlayCircle size={18} /> Watch the demo
-            </a>
-            <a href="#" className="inline-flex items-center gap-2 rounded-xl border border-line bg-white px-6 py-3.5 text-fg transition hover:border-blue/50 hover:text-blue">
-              <Code2 size={18} /> GitHub
             </a>
           </div>
         </Reveal>

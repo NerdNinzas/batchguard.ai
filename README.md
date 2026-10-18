@@ -16,6 +16,12 @@ Built for the **Google Cloud AI Builder Cup 2026 · Manufacturing** theme.
 
 > The demo account is pre-wired: six machines on a packaging line fed live by the virtual factory, Muse voice and chat, email through Resend, and real phone calls through Gemini Live. Auto-dial is on, so a critical incident really rings the on-call contact.
 
+## Demo video (AI Builder Cup submission)
+
+[![BatchGuard demo video: when a machine breaks, Muse calls you](public/screenshots/thumbnail.png)](https://youtu.be/lxMaqhoitiU)
+
+▶ **Watch the full demo:** https://youtu.be/lxMaqhoitiU
+
 ![BatchGuard landing page](public/screenshots/herosection.png)
 
 ---
