@@ -396,7 +396,7 @@ export default function VoicePage() {
         <div className="grid gap-6 lg:grid-cols-[1.4fr_1fr] lg:items-center">
           <div>
             <p className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.25em] text-blue"><Mic size={14} /> Gemini Voice AI · realtime</p>
-            <h1 className="mt-2 font-display text-4xl font-semibold leading-tight text-ink lg:text-5xl">Muse picks up the phone.</h1>
+            <h1 className="mt-2 font-display text-4xl font-semibold leading-tight text-ink lg:text-5xl">Muse makes the call.</h1>
             <p className="mt-3 max-w-xl text-[15px] leading-relaxed text-muted">When a machine turns critical, Muse calls the on-call contact over a TeleCMI line, speaks the 20-second brief from its investigation report with Gemini Live, asks for an acknowledgement and writes the answer back onto the incident. Every call type below is a Dograh workflow you can read line by line.</p>
             <div className="mt-4 flex flex-wrap gap-2">
               <Badge tone={status.enabled ? "green" : "red"}><Zap size={10} /> {status.enabled ? `Dograh · ${status.host}` : "Dograh not configured"}</Badge>
