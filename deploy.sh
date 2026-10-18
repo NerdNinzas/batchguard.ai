@@ -6,6 +6,10 @@ set -euo pipefail
 
 PROJECT="${GCP_PROJECT:-$(cat backend/.gcp-project 2>/dev/null || gcloud config get-value project)}"
 REGION="${GCP_REGION:-asia-southeast1}"
+# Firebase web app (Google sign-in). Public client config, printed by: npx firebase-tools apps:sdkconfig web --project $PROJECT
+FIREBASE_API_KEY="${FIREBASE_API_KEY:-AIzaSyAnB7-ZnFdm9dXA0Rj7FRZo1caExItxocc}"
+FIREBASE_AUTH_DOMAIN="${FIREBASE_AUTH_DOMAIN:-batchguard-ai-33e4.firebaseapp.com}"
+FIREBASE_APP_ID="${FIREBASE_APP_ID:-1:159884179678:web:6d8470b523cae698f06a4f}"
 # URLs the backend pings every 30 s so the dashboard and simulator instances stay warm (';'-separated: commas belong to gcloud).
 # Cloud Scheduler jobs (keepalive-*) ping the same targets every minute from outside — see ./deploy.sh keepalive.
 KEEPALIVE_URLS="${KEEPALIVE_URLS:-https://batchguard.web.app/login;https://batchguard-sim.web.app/;https://batchguard-frontend-6our3ivvha-as.a.run.app/login;https://batchguard-simulator-6our3ivvha-as.a.run.app/api/state}"
@@ -45,7 +49,7 @@ deploy_frontend() {
   # the public URL is only known after the first deploy; pass it in on re-deploys for correct code samples
   # public URL = Firebase Hosting site in front of Cloud Run (firebase.json); falls back to the Cloud Run URL
   APP_URL="${APP_URL:-https://batchguard.web.app}"
-  gcloud builds submit . --config cloudbuild.frontend.yaml --substitutions "_IMAGE=$REPO/frontend:latest,_APP_URL=$APP_URL,_BACKEND_URL=$BACKEND_URL" --quiet
+  gcloud builds submit . --config cloudbuild.frontend.yaml --substitutions "_IMAGE=$REPO/frontend:latest,_APP_URL=$APP_URL,_BACKEND_URL=$BACKEND_URL,_FIREBASE_API_KEY=$FIREBASE_API_KEY,_FIREBASE_AUTH_DOMAIN=$FIREBASE_AUTH_DOMAIN,_FIREBASE_PROJECT_ID=$PROJECT,_FIREBASE_APP_ID=$FIREBASE_APP_ID" --quiet
   echo "▶ deploying frontend (always-on instance, CPU never throttled: no cold starts)"
   gcloud run deploy batchguard-frontend --image "$REPO/frontend:latest" --region "$REGION" \
     --allow-unauthenticated --cpu 1 --memory 1Gi --min-instances 1 --max-instances 3 --port 8080 --no-cpu-throttling --cpu-boost \
