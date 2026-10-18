@@ -11,6 +11,7 @@ Built for the **Google Cloud AI Builder Cup 2026 · Manufacturing** theme.
 | **Live demo** | https://batchguardai.live (also https://batchguard.web.app) |
 | **Sign in** | `demo@batchguard.ai` / `demo1234` (or "Continue with Google") |
 | **Virtual factory** | https://sim.batchguardai.live — break a machine and watch Muse react |
+| **Sample machine manual** | [Manual-pdf/CX-400_Conveyor_Manual.pdf](Manual-pdf/CX-400_Conveyor_Manual.pdf) — upload it on "Onboard machine" to see the extraction |
 | **The problem and the idea** | [IDEA.md](IDEA.md) |
 | **How it is built, end to end** | [SOLUTION.md](SOLUTION.md) |
 
@@ -195,6 +196,12 @@ Sign in with `demo@batchguard.ai` / `demo1234`. With `DEMO_PRODUCER=true` and no
 ### Frontend environment (`.env.local`)
 
 `BACKEND_URL` (proxy target for `/api/*` and `/v1/*`), `NEXT_PUBLIC_BACKEND_URL` (backend origin the browser uses for the live stream, chat and voice websocket), `NEXT_PUBLIC_FIREBASE_*` (Google sign-in; optional).
+
+---
+
+## Try onboarding with the sample manual
+
+Want to see the manual-to-spec step yourself? Use the conveyor manual in [Manual-pdf/CX-400_Conveyor_Manual.pdf](Manual-pdf/CX-400_Conveyor_Manual.pdf): sign in, open **Onboard machine**, upload the PDF, and Gemini returns the parameters, units and warning/critical limits with the page each one came from. Tick "verified" and the machine gets its device key and code samples. Any other machine manual works the same way.
 
 ---
 
