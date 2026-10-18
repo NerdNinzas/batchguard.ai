@@ -19,6 +19,34 @@ def _contacts(org_id: str) -> list[dict[str, Any]]:
     return rows(conn().execute("SELECT * FROM contacts WHERE org_id=? ORDER BY escalation_order", (org_id,)).fetchall())
 
 
+def owner_recipient(org_id: str) -> dict[str, Any] | None:
+    """The organisation owner (Settings & API → owner email) gets a copy of every notification email."""
+    o = conn().execute("SELECT owner_name, owner_email FROM orgs WHERE id=?", (org_id,)).fetchone()
+    if not o or not (o["owner_email"] or "").strip():
+        return None
+    return {"id": None, "name": o["owner_name"] or "there", "role": "Owner", "email": o["owner_email"].strip(), "phone": None}
+
+
+def email_recipients(org_id: str, level: int = 0, limit: int = 1) -> list[dict[str, Any]]:
+    """Who gets an email: the contact for this escalation level if they have an address (else the next contacts that do,
+    up to `limit`), plus the owner email from settings. Deduplicated by address."""
+    contacts = _contacts(org_id)
+    ordered = contacts[level:] + contacts[:level] if contacts else []
+    out: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for ct in ordered:
+        addr = (ct.get("email") or "").strip().lower()
+        if addr and addr not in seen:
+            out.append(ct)
+            seen.add(addr)
+            if len(out) >= limit:
+                break
+    owner = owner_recipient(org_id)
+    if owner and owner["email"].lower() not in seen:
+        out.append(owner)
+    return out
+
+
 def _record(org_id: str, incident_id: str | None, channel: str, contact: dict[str, Any] | None, subject: str, body: str, status: str) -> dict[str, Any]:
     n = {
         "id": new_id("ntf"), "org_id": org_id, "incident_id": incident_id, "channel": channel,
@@ -44,10 +72,9 @@ def record(org_id: str, incident_id: str | None, channel: str, contact: dict[str
 def on_shutdown(inc: dict[str, Any], m: dict[str, Any], reason: str) -> None:
     org_id = inc["org_id"]
     _record(org_id, inc["id"], "in_app", None, f"Emergency shutdown: {m.get('name')}", reason, "delivered")
-    for ct in _contacts(org_id)[:3]:
-        if ct.get("email"):
-            subj, html_body = mail.shutdown(inc, m, reason, ct)
-            _record(org_id, inc["id"], "email", ct, subj, reason, send_email(ct["email"], subj, html_body))
+    for ct in email_recipients(org_id, limit=3):
+        subj, html_body = mail.shutdown(inc, m, reason, ct)
+        _record(org_id, inc["id"], "email", ct, subj, reason, send_email(ct["email"], subj, html_body))
 
 
 def send_email(to_addr: str, subject: str, html_body: str) -> str:
@@ -78,13 +105,12 @@ def on_incident_opened(inc: dict[str, Any], m: dict[str, Any]) -> None:
     _record(org_id, inc["id"], "in_app", None, subject, inc["title"], "delivered")
     sev = inc["severity"]
     if sev in ("warning", "critical", "emergency"):
-        contacts = _contacts(org_id)
-        primary = contacts[0] if contacts else None
-        if primary and primary.get("email"):
-            subj, html_body = mail.incident_opened(inc, m, primary)
-            _record(org_id, inc["id"], "email", primary, subj, body, send_email(primary["email"], subj, html_body))
-        else:
-            _record(org_id, inc["id"], "email", None, subject, body, "skipped: no primary contact")
+        targets = email_recipients(org_id)
+        for ct in targets:
+            subj, html_body = mail.incident_opened(inc, m, ct)
+            _record(org_id, inc["id"], "email", ct, subj, body, send_email(ct["email"], subj, html_body))
+        if not targets:
+            _record(org_id, inc["id"], "email", None, subject, body, "skipped: no contact or owner email")
     if sev in ("critical", "emergency"):
         contacts = _contacts(org_id)
         primary = contacts[0] if contacts else None
@@ -97,9 +123,9 @@ def on_incident_escalated(inc: dict[str, Any], m: dict[str, Any], level: int = 0
     contacts = _contacts(org_id)
     target = contacts[min(level, len(contacts) - 1)] if contacts else None
     _record(org_id, inc["id"], "in_app", None, subject, f"Escalated to {inc['severity']}: {inc['title']}", "delivered")
-    if target and target.get("email"):
-        subj, html_body = mail.incident_escalated(inc, m, target, level)
-        _record(org_id, inc["id"], "email", target, subj, body, send_email(target["email"], subj, html_body))
+    for ct in email_recipients(org_id, level=min(level, max(len(contacts) - 1, 0))):
+        subj, html_body = mail.incident_escalated(inc, m, ct, level)
+        _record(org_id, inc["id"], "email", ct, subj, body, send_email(ct["email"], subj, html_body))
     if inc["severity"] in ("critical", "emergency"):
         _voice(org_id, inc, m, target, level=level)
 
@@ -127,26 +153,22 @@ def on_report_ready(inc: dict[str, Any], m: dict[str, Any], report: dict[str, An
     """Muse finished investigating: mail the evidence-backed report to the primary contact (warning and above)."""
     if inc.get("severity") not in ("warning", "critical", "emergency"):
         return
-    contacts = _contacts(inc["org_id"])
-    primary = contacts[0] if contacts else None
-    if not primary or not primary.get("email"):
-        return
-    subj, html_body = mail.report_ready(inc, m, report, primary)
-    _record(inc["org_id"], inc["id"], "email", primary, subj, (report.get("summary") or "")[:300], send_email(primary["email"], subj, html_body))
+    for ct in email_recipients(inc["org_id"]):
+        subj, html_body = mail.report_ready(inc, m, report, ct)
+        _record(inc["org_id"], inc["id"], "email", ct, subj, (report.get("summary") or "")[:300], send_email(ct["email"], subj, html_body))
 
 
 def on_incident_resolved(inc: dict[str, Any], m: dict[str, Any], feedback: dict[str, Any] | None) -> None:
-    contacts = _contacts(inc["org_id"])
-    primary = contacts[0] if contacts else None
     auto = (feedback or {}).get("verdict") == "auto"
     back_online = auto and (feedback or {}).get("actual_cause") == "telemetry resumed"
     subj = f"Back online: {m.get('name')}" if back_online else f"Back to normal: {m.get('name')}" if auto else f"Resolved: {inc['title']}"
     body = (f"{m.get('name')} is sending telemetry again" if back_online else
             f"{inc['title']} — parameters returned to normal; incident closed automatically" if auto else ((feedback or {}).get("actual_cause") or "closed"))
     _record(inc["org_id"], inc["id"], "in_app", None, subj, body, "delivered")
-    if primary and primary.get("email") and (feedback or {}).get("verdict") != "auto":
-        subj, html_body = mail.incident_resolved(inc, m, feedback)
-        _record(inc["org_id"], inc["id"], "email", primary, subj, "resolved", send_email(primary["email"], subj, html_body))
+    if not auto:
+        for ct in email_recipients(inc["org_id"]):
+            subj, html_body = mail.incident_resolved(inc, m, feedback)
+            _record(inc["org_id"], inc["id"], "email", ct, subj, "resolved", send_email(ct["email"], subj, html_body))
 
 
 def on_welcome(org: dict[str, Any], user: dict[str, Any]) -> None:
@@ -156,12 +178,9 @@ def on_welcome(org: dict[str, Any], user: dict[str, Any]) -> None:
 
 
 def on_voice_call_completed(call: dict[str, Any], transcript_lines: list[dict[str, str]], outcome: dict[str, Any]) -> None:
-    contacts = _contacts(call["org_id"])
-    primary = contacts[0] if contacts else None
-    if not primary or not primary.get("email"):
-        return
-    subj, html_body = mail.voice_summary(call, transcript_lines, outcome, primary)
-    _record(call["org_id"], call.get("incident_id"), "email", primary, subj, f"call summary {call['id']}", send_email(primary["email"], subj, html_body))
+    for ct in email_recipients(call["org_id"]):
+        subj, html_body = mail.voice_summary(call, transcript_lines, outcome, ct)
+        _record(call["org_id"], call.get("incident_id"), "email", ct, subj, f"call summary {call['id']}", send_email(ct["email"], subj, html_body))
 
 
 def daily_digest_text(org_id: str) -> str:

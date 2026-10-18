@@ -34,14 +34,15 @@ def mark_read(org: dict[str, Any] = Depends(current_org)) -> dict[str, bool]:
 
 @router.post("/notifications/test-email")
 def test_email(org: dict[str, Any] = Depends(current_org), user: dict[str, Any] = Depends(current_user)) -> dict[str, Any]:
-    subj, html_body = mail.test_email(user)
-    status = mail.send(user["email"], subj, html_body)
-    n = {"id": new_id("ntf"), "org_id": org["id"], "incident_id": None, "channel": "email", "contact_id": None, "to_addr": user["email"],
+    to = (org.get("owner_email") or "").strip() or user["email"]  # owner email from Settings & API, else the signed-in user
+    subj, html_body = mail.test_email({**user, "email": to, "name": org.get("owner_name") or user.get("name")})
+    status = mail.send(to, subj, html_body)
+    n = {"id": new_id("ntf"), "org_id": org["id"], "incident_id": None, "channel": "email", "contact_id": None, "to_addr": to,
          "subject": subj, "body": "test email", "status": status, "sent_at": now(), "read": 1}
     with tx() as c:
         c.execute("INSERT INTO notifications (id, org_id, incident_id, channel, contact_id, to_addr, subject, body, status, sent_at, read) "
                   "VALUES (:id,:org_id,:incident_id,:channel,:contact_id,:to_addr,:subject,:body,:status,:sent_at,:read)", n)
-    return {"status": status, "to": user["email"], "enabled": mail.enabled(), "from": settings.resend_from}
+    return {"status": status, "to": to, "enabled": mail.enabled(), "from": settings.resend_from}
 
 
 @router.get("/email/templates")

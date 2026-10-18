@@ -36,7 +36,7 @@ function EmailCard({ email }: { email: EmailInfo | null }) {
             <p className="text-sm text-muted">Every alert Muse sends is a branded template with the Muse portrait: incidents, escalations, the investigation report, resolutions, voice call summaries, the daily digest and the welcome mail.</p>
             <div className="rounded-xl border border-line bg-white p-3 text-xs"><p className="text-muted">From</p><p className="font-mono text-ink">{email.from}</p><p className="mt-2 text-muted">Images served from</p><p className="truncate font-mono text-ink" title={email.asset_base}>{email.asset_base}</p></div>
             <Button onClick={sendTest} loading={sending} className="w-full"><Send size={15} /> Send me a test email</Button>
-            <p className="text-[11px] text-muted">Goes to {user.email}. {email.enabled ? "" : "RESEND_API_KEY is empty, so the backend records it as simulated."}</p>
+            <p className="text-[11px] text-muted">Goes to the owner email, {user.org?.owner_email || user.email}. Every incident, report, resolution and call summary is copied there too. {email.enabled ? "" : "RESEND_API_KEY is empty, so the backend records it as simulated."}</p>
             <div className="flex flex-wrap gap-1.5">
               {email.templates.map((t) => <button key={t} onClick={() => setPreview(t)} className={`rounded-full border px-2.5 py-1 text-[11px] ${preview === t ? "border-blue bg-sky-soft text-blue" : "border-line bg-white text-muted hover:text-ink"}`}>{TEMPLATE_LABEL[t] ?? t}</button>)}
             </div>
