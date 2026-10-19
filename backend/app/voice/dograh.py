@@ -52,12 +52,23 @@ def get_workflow(workflow_id: int) -> dict[str, Any]:
     return _req("GET", f"/workflow/fetch/{workflow_id}")
 
 
+def workflow_configurations() -> dict[str, Any]:
+    """Per-call limits Dograh enforces on its side: hard hang-up at max_call_duration, and end after max_user_idle_timeout
+    seconds of silence from the person. Keeps Gemini Live minutes (and TeleCMI minutes) bounded per call."""
+    return {"max_call_duration": int(settings.voice_max_call_seconds), "max_user_idle_timeout": float(settings.voice_user_idle_seconds)}
+
+
 def create_workflow(name: str, definition: dict[str, Any]) -> dict[str, Any]:
-    return _req("POST", "/workflow/create/definition", {"name": name, "workflow_definition": definition})
+    wf = _req("POST", "/workflow/create/definition", {"name": name, "workflow_definition": definition})
+    try:  # the create endpoint takes no configurations; set them right after
+        _req("PUT", f"/workflow/{int(wf['id'])}", {"name": name, "workflow_definition": definition, "workflow_configurations": workflow_configurations()})
+    except Exception as e:  # noqa: BLE001
+        print("dograh: could not set workflow configurations on create:", e)
+    return wf
 
 
 def update_workflow(workflow_id: int, name: str, definition: dict[str, Any]) -> dict[str, Any]:
-    return _req("PUT", f"/workflow/{workflow_id}", {"name": name, "workflow_definition": definition})
+    return _req("PUT", f"/workflow/{workflow_id}", {"name": name, "workflow_definition": definition, "workflow_configurations": workflow_configurations()})
 
 
 def publish_workflow(workflow_id: int) -> Any:

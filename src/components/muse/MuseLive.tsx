@@ -170,6 +170,11 @@ export function MuseLiveProvider({ children }: { children: ReactNode }) {
   const playHead = useRef(0);
   const sources = useRef<AudioBufferSourceNode[]>([]);
   const speakingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Silence watchdog: the realtime session (and its Gemini Live minutes) ends after SILENCE_MS with nobody talking —
+  // "activity" is the user's voice above a small threshold, or Muse still playing audio.
+  const SILENCE_MS = 10000;
+  const lastActivity = useRef(0);
+  const silenceTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const stopPlayback = useCallback(() => {
     for (const s of sources.current) { try { s.stop(); } catch {} }
@@ -178,6 +183,7 @@ export function MuseLiveProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const stopVoice = useCallback(() => {
+    if (silenceTimer.current) { clearInterval(silenceTimer.current); silenceTimer.current = null; }
     try { wsRef.current?.send(JSON.stringify({ type: "end" })); } catch {}
     wsRef.current?.close();
     wsRef.current = null;
@@ -254,6 +260,7 @@ export function MuseLiveProvider({ children }: { children: ReactNode }) {
         const at = Math.max(ctx.currentTime + 0.02, playHead.current);
         src.start(at);
         playHead.current = at + buf.duration;
+        lastActivity.current = Math.max(lastActivity.current, Date.now() + (playHead.current - ctx.currentTime) * 1000);
         sources.current.push(src);
         src.onended = () => { sources.current = sources.current.filter((s) => s !== src); };
         setVoice("speaking");
@@ -301,7 +308,9 @@ export function MuseLiveProvider({ children }: { children: ReactNode }) {
         const f = e.inputBuffer.getChannelData(0);
         let sum = 0;
         for (let i = 0; i < f.length; i += 8) sum += f[i] * f[i];
-        setLevel(Math.min(1, Math.sqrt(sum / (f.length / 8)) * 6));
+        const rms = Math.sqrt(sum / (f.length / 8));
+        if (rms > 0.015) lastActivity.current = Math.max(lastActivity.current, Date.now());
+        setLevel(Math.min(1, rms * 6));
         let out: Float32Array = f;
         if (ratio > 1.01) {
           const n = Math.floor(f.length / ratio);
@@ -313,6 +322,15 @@ export function MuseLiveProvider({ children }: { children: ReactNode }) {
       srcNode.connect(proc);
       proc.connect(silent);
       silent.connect(mic.destination);
+      lastActivity.current = Date.now();
+      if (silenceTimer.current) clearInterval(silenceTimer.current);
+      silenceTimer.current = setInterval(() => {
+        if (wsRef.current !== ws) return;
+        if (Date.now() - lastActivity.current > SILENCE_MS) {
+          stopVoice();
+          setVoiceError("Voice closed after 10 seconds of silence. Tap the button to talk again.");
+        }
+      }, 1000);
     } catch (e) { return fail(`Microphone capture failed: ${e instanceof Error ? e.message : String(e)}`); }
   }, [voice, goTo, stopPlayback, stopVoice, toast, onEdited]);
 

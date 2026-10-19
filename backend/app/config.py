@@ -56,6 +56,8 @@ class Settings(BaseSettings):
     stale_after_seconds: int = 10
     incident_cooldown_seconds: int = 300
     escalation_timeout_seconds: int = 120
+    voice_max_call_seconds: int = 60  # Dograh hangs up at this point (max_call_duration); the scripts say sorry first
+    voice_user_idle_seconds: int = 10  # Dograh ends the call after this much silence from the person (max_user_idle_timeout)
     trend_window_seconds: int = 60
     demo_mode: bool = True
     demo_producer: bool = True  # built-in telemetry producer; off when the virtual factory simulator feeds the demo org
