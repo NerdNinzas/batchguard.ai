@@ -1,3 +1,4 @@
+import time as _time
 """Google Cloud adapters. Every call is optional, non-blocking and fails soft: SQLite stays the
 fast local store; these mirror/stream to the cloud services when GCP_PROJECT is configured.
 
@@ -95,7 +96,18 @@ def mirror(collection: str, doc_id: str, data: dict[str, Any], merge: bool = Tru
     _bg(run)
 
 
+_mirror_latest_at: dict[str, float] = {}
+MIRROR_LATEST_EVERY = 10.0  # seconds per machine: the dashboard reads SQLite, the Firestore copy only needs to be fresh-ish
+
+
 def mirror_latest(machine_id: str, org_id: str, latest: dict[str, Any], status: str | None = None) -> None:
+    # telemetry arrives every second per machine; without this throttle every reading is a billable Firestore write
+    if not status:
+        now_t = _time.time()
+        if now_t - _mirror_latest_at.get(machine_id, 0.0) < MIRROR_LATEST_EVERY:
+            return
+        _mirror_latest_at[machine_id] = now_t
+
     def run() -> None:
         db = _client("firestore")
         if db is None:
@@ -211,7 +223,6 @@ def download_blob(gcs_uri: str) -> bytes | None:
 import shutil
 import sqlite3
 import tempfile
-import time as _time
 from pathlib import Path
 
 _pending: dict[tuple[str, str], str] = {}  # (table, key) -> 'U' | 'D'
